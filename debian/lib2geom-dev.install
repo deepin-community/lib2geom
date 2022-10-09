@@ -1,0 +1,4 @@
+usr/include
+usr/lib/*/cmake
+usr/lib/*/lib2geom.so
+usr/lib/*/pkgconfig

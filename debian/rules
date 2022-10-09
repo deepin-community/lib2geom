@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+
+include /usr/share/dpkg/architecture.mk
+
+%:
+	dh $@ --buildsystem cmake+ninja
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-D2GEOM_BUILD_SHARED=ON \
+		-DCMAKE_SKIP_RPATH:BOOL=ON \
+
+# needed to pass the tests, as without rpath somhow the tests can't find the library anymore
+override_dh_auto_test:
+	LD_LIBRARY_PATH=$(CURDIR)/obj-$(DEB_HOST_GNU_TYPE)/src/2geom dh_auto_test

@@ -1,0 +1,74 @@
+Source: lib2geom
+Section: libs
+Priority: optional
+Maintainer: Debian Multimedia Maintainers <debian-multimedia@lists.debian.org>
+Uploaders:
+ Mattia Rizzolo <mattia@debian.org>,
+Build-Depends:
+ cmake (>= 3.12),
+ debhelper-compat (=13),
+ ninja-build,
+Build-Depends-Arch:
+ libboost-dev,
+ libcairo2-dev,
+ libdouble-conversion-dev,
+ libgsl-dev,
+ libgtest-dev,
+ libgtk-3-dev,
+ pkg-config,
+ ragel,
+Standards-Version: 4.6.1
+Rules-Requires-Root: no
+Homepage: https://gitlab.com/inkscape/lib2geom
+Vcs-Git: https://salsa.debian.org/multimedia-team/lib2geom.git
+Vcs-Browser: https://salsa.debian.org/multimedia-team/lib2gem
+
+Package: lib2geom1.1.0
+Architecture: any
+Multi-Arch: same
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+Description: robust computational geometry framework -- shared library
+ 2Geom is a C++ 2D geometry library geared towards robust processing of
+ computational geometry data associated with vector graphics. The primary
+ design consideration is ease of use and clarity. It is dual-licensed
+ under LGPL 2.1 and MPL 1.1.
+ .
+ The library is descended from a set of geometric routines present in
+ Inkscape, a vector graphics editor based around the Scalable Vector
+ Graphics format, the most widespread vector graphics interchange format
+ on the Web and a W3C Recommendation. Due to this legacy, not all parts
+ of the API form a coherent whole (yet).
+ .
+ Rendering is outside the scope of this library, and it is assumed
+ something like libcairo or similar is employed for this.  2geom
+ concentrates on higher level algorithms and geometric computations.
+ .
+ This package contains the shared library.
+
+Package: lib2geom-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends:
+ lib2geom1.1.0 (= ${binary:Version}),
+ ${misc:Depends},
+ ${shlibs:Depends},
+Description: robust computational geometry framework -- development library
+ 2Geom is a C++ 2D geometry library geared towards robust processing of
+ computational geometry data associated with vector graphics. The primary
+ design consideration is ease of use and clarity. It is dual-licensed
+ under LGPL 2.1 and MPL 1.1.
+ .
+ The library is descended from a set of geometric routines present in
+ Inkscape, a vector graphics editor based around the Scalable Vector
+ Graphics format, the most widespread vector graphics interchange format
+ on the Web and a W3C Recommendation. Due to this legacy, not all parts
+ of the API form a coherent whole (yet).
+ .
+ Rendering is outside the scope of this library, and it is assumed
+ something like libcairo or similar is employed for this.  2geom
+ concentrates on higher level algorithms and geometric computations.
+ .
+ This package contains the development files needed to build against 2geom.

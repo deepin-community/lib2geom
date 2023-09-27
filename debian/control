@@ -5,8 +5,8 @@ Maintainer: Debian Multimedia Maintainers <debian-multimedia@lists.debian.org>
 Uploaders:
  Mattia Rizzolo <mattia@debian.org>,
 Build-Depends:
- cmake (>= 3.12),
- debhelper-compat (=13),
+ cmake,
+ debhelper-compat (= 13),
  ninja-build,
 Build-Depends-Arch:
  libboost-dev,
@@ -17,13 +17,13 @@ Build-Depends-Arch:
  libgtk-3-dev,
  pkg-config,
  ragel,
-Standards-Version: 4.6.1
+Standards-Version: 4.6.2
 Rules-Requires-Root: no
 Homepage: https://gitlab.com/inkscape/lib2geom
 Vcs-Git: https://salsa.debian.org/multimedia-team/lib2geom.git
-Vcs-Browser: https://salsa.debian.org/multimedia-team/lib2gem
+Vcs-Browser: https://salsa.debian.org/multimedia-team/lib2geom
 
-Package: lib2geom1.1.0
+Package: lib2geom1.2.0
 Architecture: any
 Multi-Arch: same
 Depends:
@@ -52,7 +52,7 @@ Section: libdevel
 Architecture: any
 Multi-Arch: same
 Depends:
- lib2geom1.1.0 (= ${binary:Version}),
+ lib2geom1.2.0 (= ${binary:Version}),
  ${misc:Depends},
  ${shlibs:Depends},
 Description: robust computational geometry framework -- development library

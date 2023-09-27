@@ -1,8 +1,32 @@
-lib2geom (1.2-1) UNRELEASED; urgency=medium
+lib2geom (1.2.2-3) unstable; urgency=medium
 
-  * update
+  * Upload to unstable.
+  * Bump copyright years.
 
- -- Debian Multimedia Maintainers <debian-multimedia@lists.debian.org>  Tue, 02 Aug 2022 09:16:32 +0800
+ -- Mattia Rizzolo <mattia@debian.org>  Tue, 10 Jan 2023 01:51:24 +0100
+
+lib2geom (1.2.2-2) experimental; urgency=medium
+
+  * Rename lib2geom library package to follow the bumped SOVERSION.
+  * Drop the patch from the previous upload.
+  * d/copyright: Remove an unused license paragraph.
+
+ -- Mattia Rizzolo <mattia@debian.org>  Sun, 18 Dec 2022 21:03:14 +0100
+
+lib2geom (1.2.2-1) unstable; urgency=medium
+
+  [ Debian Janitor ]
+  * Remove constraints unnecessary since buster
+    * Build-Depends: Drop versioned constraint on cmake.
+
+  [ Mattia Rizzolo ]
+  * New upstream version 1.2.2
+  * d/control:
+    + Fix typo in Vcs-Browser
+    + Bump Standards-Version to 4.6.2, no changes needed.
+  * Add patch to temporary ignore a SONAME bump.
+
+ -- Mattia Rizzolo <mattia@debian.org>  Sun, 18 Dec 2022 19:18:49 +0100
 
 lib2geom (1.2-1) unstable; urgency=medium
 

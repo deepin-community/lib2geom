@@ -1,3 +1,9 @@
+lib2geom (1.2.2-3deepin0) unstable; urgency=medium
+
+  * No source change upload against GCC 12.
+
+ -- Tianyu Chen <sweetyfish@deepin.org>  Thu, 19 Sep 2024 22:52:52 +0800
+
 lib2geom (1.2.2-3) unstable; urgency=medium
 
   * Upload to unstable.

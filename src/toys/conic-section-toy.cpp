@@ -358,7 +358,7 @@ class ConicSectionToy : public Toy
 
 
         Dim2 DIM = x_y_toggle.on ? X : Y;
-        Line l(p1.pos, DIM * (-M_PI/2) + M_PI/2);
+        Line l(p1.pos, int{DIM} * (-M_PI/2) + M_PI/2);
 
         cairo_set_line_width(cr, 0.2);
         cairo_set_source_rgba(cr, 0.3, 0.3, 0.3, 1.0);
@@ -371,7 +371,7 @@ class ConicSectionToy : public Toy
         {
             cs.roots(values, p1.pos[DIM], DIM);
         }
-        catch(Geom::Exception e)
+        catch (Geom::Exception const &e)
         {
             std::cerr << e.what() << std::endl;
         }
@@ -424,7 +424,7 @@ class ConicSectionToy : public Toy
         {
             P = cs.nearestTime (p1.pos);
         }
-        catch (LogicalError e)
+        catch (LogicalError const &e)
         {
             std::cerr << e.what() << std::endl;
         }
@@ -469,7 +469,7 @@ class ConicSectionToy : public Toy
             p2.pos = cs.nearestTime (p2.pos);
             p3.pos = cs.nearestTime (p3.pos);
         }
-        catch (LogicalError e)
+        catch (LogicalError const &e)
         {
             std::cerr << e.what() << std::endl;
         }

@@ -5,7 +5,8 @@
  * Authors:
  *    MenTaLguY <mental@rydia.net>
  *    Krzysztof Kosiński <tweenk.pl@gmail.com>
- * 
+ *    Rafał Siejakowski <rs@rs-math.net>
+ *
  * Copyright 2007-2015 Authors
  *
  * This library is free software; you can redistribute it and/or
@@ -222,9 +223,6 @@ Poly gcd(Poly const &a, Poly const &b, const double /*tol*/) {
     return gcd(b, r);
 }
 
-
-
-
 std::vector<Coord> solve_quadratic(Coord a, Coord b, Coord c)
 {
     std::vector<Coord> result;
@@ -258,7 +256,6 @@ std::vector<Coord> solve_quadratic(Coord a, Coord b, Coord c)
     std::sort(result.begin(), result.end());
     return result;
 }
-
 
 std::vector<Coord> solve_cubic(Coord a, Coord b, Coord c, Coord d)
 {
@@ -318,10 +315,58 @@ std::vector<Coord> solve_cubic(Coord a, Coord b, Coord c, Coord d)
     return result;
 }
 
+std::vector<Coord> solve_quartic(Coord a, Coord b, Coord c, Coord d, Coord e)
+{
+    // Based on a variation of the Ferrari-Lagrange method, see
+    // "A universal method of solving quartic equations" by S. Shmakov,
+    // International Journal of Pure and Applied Mathematics vol. 71 no. 2.
 
-/*Poly divide_out_root(Poly const & p, double x) {
-    assert(1);
-    }*/
+    if (a == 0) {
+        return solve_cubic(b, c, d, e);
+    }
+    if (e == 0) { // Divide by x
+        auto result = solve_cubic(a, b, c, d);
+        result.push_back(0);
+        std::sort(result.begin(), result.end());
+        return result;
+    }
+
+    // Divide out by a so that the leading coefficient is 1.
+    b /= a;
+    c /= a;
+    d /= a;
+    e /= a;
+
+    // Solve the resolvent cubic
+    auto const resolvent_solutions = solve_cubic(1, -c, b * d - 4 * e, 4 * c * e - sqr(b) * e - sqr(d));
+    // If there are 3 solutions, pick the middle one, else the first one.
+    auto const y = resolvent_solutions[resolvent_solutions.size() == 3];
+
+    // Find the quadratic factors
+    auto linear_terms = solve_quadratic(1, -b, c - y);
+    auto constant_terms = solve_quadratic(1, -y, e);
+    if (linear_terms.size() < 2 || constant_terms.size() < 2) {
+        return {}; // There are no roots
+    }
+
+    {
+        // Reorder constant terms if needed so that they correspond to linear terms
+        auto const current_cross = linear_terms[0] * constant_terms[1] + linear_terms[1] * constant_terms[0];
+        auto const reordered_cross = linear_terms[0] * constant_terms[0] + linear_terms[1] * constant_terms[1];
+        if (std::abs(d - reordered_cross) < std::abs(d - current_cross)) {
+            std::swap(constant_terms[0], constant_terms[1]);
+        }
+    }
+
+    std::vector<Coord> result;
+    result.reserve(4);
+    for (size_t i : {0, 1}) {
+        auto const factor_roots = solve_quadratic(1, linear_terms[i], constant_terms[i]);
+        result.insert(result.end(), factor_roots.begin(), factor_roots.end());
+    }
+    std::sort(result.begin(), result.end());
+    return result;
+}
 
 } //namespace Geom
 

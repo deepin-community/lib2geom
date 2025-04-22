@@ -31,6 +31,8 @@
  * the specific language governing rights and limitations.
  */
 
+#include <cassert>
+#include <unordered_map>
 #include <gtest/gtest.h>
 #include <2geom/point.h>
 
@@ -74,7 +76,85 @@ TEST(PointTest, Near) {
     EXPECT_FALSE(are_near_rel(Point(100, 0), Point(100, 1e-2)));
 }
 
-} // end namespace Geom
+TEST(PointTest, Multiplicative) {
+    EXPECT_EQ(Point(2, 3) * Point(4, 5), Point(8, 15));
+    EXPECT_EQ(IntPoint(2, 3) * IntPoint(4, 5), IntPoint(8, 15));
+    EXPECT_EQ(Point(10, 11) / Point(2, 3), Point(5, 11.0 / 3.0));
+    EXPECT_EQ(IntPoint(10, 11) / IntPoint(2, 3), IntPoint(5, 11 / 3));
+}
+
+TEST(PointTest, PointCtors) {
+    Point a(2, 3);
+    EXPECT_EQ(a[X], 2);
+    EXPECT_EQ(a[Y], 3);
+
+    a.~Point();
+    new (&a) Point;
+    EXPECT_EQ(a, Point(0, 0));
+
+    a = Point(IntPoint(4, 5));
+    EXPECT_EQ(a[X], 4);
+    EXPECT_EQ(a[Y], 5);
+}
+
+TEST(PointTest, IntPointCtors) {
+    IntPoint a(2, 3);
+    EXPECT_EQ(a[X], 2);
+    EXPECT_EQ(a[Y], 3);
+
+    a.~IntPoint();
+    new (&a) IntPoint;
+    EXPECT_EQ(a, IntPoint(0, 0));
+}
+
+template <typename PointType>
+constexpr bool structured_binding_test()
+{
+    auto p = PointType(1, 2);
+
+    // Check unpacking the coordinates works.
+    {
+        auto [x, y] = p;
+        assert(p[X] == x);
+        assert(p[Y] == y);
+    }
+
+    // Ensure point is writeable.
+    {
+        auto &[x, y] = p;
+        assert(p[X] == x);
+        assert(p[Y] == y);
+        x = 3;
+        y = 4;
+        assert(p == PointType(3, 4));
+    }
+
+    return true;
+}
+
+TEST(IntervalTest, StructuredBindingTest)
+{
+    constexpr bool results[] = { structured_binding_test<Point>(),
+                                 structured_binding_test<IntPoint>() };
+}
+
+TEST(PointTest, Hash)
+{
+    auto test = [] <typename PointType> {
+        std::unordered_map<PointType, int> map;
+        map[PointType(1, 1)] = 1;
+        map[PointType(1, 2)] = 2;
+        map[PointType(2, 1)] = 3;
+        EXPECT_EQ(map[PointType(1, 1)], 1);
+        EXPECT_EQ(map[PointType(1, 2)], 2);
+        EXPECT_EQ(map[PointType(2, 1)], 3);
+    };
+
+    test.template operator()<Point>();
+    test.template operator()<IntPoint>();
+}
+
+} // namespace Geom
 
 /*
   Local Variables:

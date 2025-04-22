@@ -76,7 +76,7 @@ namespace Geom {
 
 std::string format_coord_shortest(Coord x)
 {
-    static double_conversion::DoubleToStringConverter conv(
+    static const double_conversion::DoubleToStringConverter conv(
         double_conversion::DoubleToStringConverter::UNIQUE_ZERO,
         "inf", "NaN", 'e', -3, 6, 0, 0);
     std::string ret(' ', 32);
@@ -88,7 +88,7 @@ std::string format_coord_shortest(Coord x)
 
 std::string format_coord_nice(Coord x)
 {
-    static double_conversion::DoubleToStringConverter conv(
+    static const double_conversion::DoubleToStringConverter conv(
     	double_conversion::DoubleToStringConverter::UNIQUE_ZERO,
         "inf", "NaN", 'e', -6, 21, 0, 0);
     std::string ret(' ', 32);
@@ -100,7 +100,7 @@ std::string format_coord_nice(Coord x)
 
 Coord parse_coord(std::string const &s)
 {
-    static double_conversion::StringToDoubleConverter conv(
+    static const double_conversion::StringToDoubleConverter conv(
     	double_conversion::StringToDoubleConverter::ALLOW_LEADING_SPACES |
 		double_conversion::StringToDoubleConverter::ALLOW_TRAILING_SPACES |
 		double_conversion::StringToDoubleConverter::ALLOW_SPACES_AFTER_SIGN,

@@ -21,7 +21,6 @@
  - Jelle R. Moulder
  - Alvin Penner
  - Jan Pulmann
- - Rafał M. Siejakowski
  - Michael G. Sloan
  - Aaron Spike
  - Michael Wybrow

@@ -47,7 +47,7 @@ TEST(ChooseTest, PascalsTriangle) {
         double b = choose<double>(n-1, k);
         double c = choose<double>(n-1, k-1);
 
-        EXPECT_EQ(a, b + c);
+        EXPECT_NEAR((b + c) / a, 1.0, 1e-14);
     }
 }
 
@@ -69,4 +69,11 @@ TEST(ChooseTest, Values) {
     // number of possible Lotto results
     EXPECT_EQ(choose<double>(49,  6), 13983816.);
     EXPECT_EQ(choose<double>(49, 43), 13983816.);
+}
+
+TEST(ChooseTest, Unsigned) {
+    auto const BIG = std::numeric_limits<unsigned>::max() - 1;
+    EXPECT_EQ(choose<unsigned>(BIG, BIG - 1), BIG);
+    EXPECT_EQ(choose<unsigned>(BIG, BIG), 1);
+    EXPECT_EQ(choose<unsigned>(BIG, BIG + 1), 0);
 }

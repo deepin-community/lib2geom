@@ -1,4 +1,3 @@
-
 #include <2geom/solver.h>
 #include <2geom/choose.h>
 #include <2geom/bezier.h>
@@ -15,110 +14,32 @@
  */
 
 //#define debug(x) do{x;}while(0)
-#define debug(x) 
+#define debug(x)
 
-namespace Geom{
+namespace Geom {
+namespace {
 
-template<class t>
-static int SGN(t x) { return (x > 0 ? 1 : (x < 0 ? -1 : 0)); }
-
-class Bernsteins{
-public:
-    static const size_t MAX_DEPTH = 22;
+struct Bernsteins
+{
+    static constexpr size_t MAX_DEPTH = 22;
     std::vector<double> &solutions;
-    //std::vector<double> dsolutions;
 
-    Bernsteins(std::vector<double> & sol)
-        : solutions(sol)
+    Bernsteins(std::vector<double> &sol)
+        : solutions{sol}
     {}
-
-    void subdivide(double const *V,
-                   double t,
-                   double *Left,
-                   double *Right);
 
     double secant(Bezier const &bz);
 
-
     void find_bernstein_roots(Bezier const &bz, unsigned depth,
-                         double left_t, double right_t);
+                              double left_t, double right_t);
 };
 
-template <typename T>
-inline std::ostream &operator<< (std::ostream &out_file, const std::vector<T> & b) {
-    out_file << "[";
-    for(unsigned i = 0; i < b.size(); i++) {
-        out_file << b[i] << ", ";
-    }
-    return out_file << "]";
-}
-
-void convex_hull_marching(Bezier const &src_bz, Bezier bz,
-                          std::vector<double> &solutions,
-                          double left_t,
-                          double right_t)
-{
-    while(bz.order() > 0 && bz[0] == 0) {
-        std::cout << "deflate\n";
-        bz = bz.deflate();
-        solutions.push_back(left_t);
-    }
-    std::cout << std::endl;
-    if (bz.order() > 0) {
-    
-        int old_sign = SGN(bz[0]);
-    
-        double left_bound = 0;
-        double dt = 0;
-        for (size_t i = 1; i < bz.size(); i++)
-        {
-            int sign = SGN(bz[i]);
-            if (sign != old_sign)
-            {
-                dt = double(i) / bz.order();
-                left_bound = dt * bz[0] / (bz[0] - bz[i]);
-                break;
-            }
-            old_sign = sign;
-        }
-        if (dt == 0) return;
-        std::cout << bz << std::endl;
-        std::cout << "dt = " << dt << std::endl;
-        std::cout << "left_t = " << left_t << std::endl;
-        std::cout << "right_t = " << right_t << std::endl;
-        std::cout << "left bound = " << left_bound 
-                  << " = " << bz(left_bound) << std::endl; 
-        double new_left_t = left_bound * (right_t - left_t) + left_t;
-        std::cout << "new_left_t = " << new_left_t << std::endl;
-        Bezier bzr = portion(src_bz, new_left_t, 1);
-        while(bzr.order() > 0 && bzr[0] == 0) {
-            std::cout << "deflate\n";
-            bzr = bzr.deflate();
-            solutions.push_back(new_left_t);
-        }
-        if (left_t < new_left_t) {
-            convex_hull_marching(src_bz, bzr,
-                                 solutions,
-                                 new_left_t, right_t); 
-        } else {
-            std::cout << "epsilon reached\n";
-            while(bzr.order() > 0 && fabs(bzr[0]) <= 1e-10) {
-                std::cout << "deflate\n";
-                bzr = bzr.deflate();
-                std::cout << bzr << std::endl;
-                solutions.push_back(new_left_t);
-            }
-
-        }
-    }
-}
+} // namespace
 
 void
 Bezier::find_bezier_roots(std::vector<double> &solutions,
                           double left_t, double right_t) const {
     Bezier bz = *this;
-    //convex_hull_marching(bz, bz, solutions, left_t, right_t);
-    //return;
 
     // a constant bezier, even if identically zero, has no roots
     if (bz.isConstant()) {
@@ -133,7 +54,7 @@ Bezier::find_bezier_roots(std::vector<double> &solutions,
     if (bz.degree() == 1) {
         debug(std::cout << "linear\n");
 
-        if (SGN(bz[0]) != SGN(bz[1])) {
+        if (Geom::sgn(bz[0]) != Geom::sgn(bz[1])) {
             double d = bz[0] - bz[1];
             if(d != 0) {
                 double r = bz[0] / d;
@@ -158,12 +79,12 @@ void Bernsteins::find_bernstein_roots(Bezier const &bz,
     debug(std::cout << left_t << ", " << right_t << std::endl);
     size_t n_crossings = 0;
 
-    int old_sign = SGN(bz[0]);
+    int old_sign = Geom::sgn(bz[0]);
     //std::cout << "w[0] = " << bz[0] << std::endl;
     for (size_t i = 1; i < bz.size(); i++)
     {
         //std::cout << "w[" << i << "] = " << w[i] << std::endl;
-        int sign = SGN(bz[i]);
+        int sign = Geom::sgn(bz[i]);
         if (sign != 0)
         {
             if (sign != old_sign && old_sign != 0)
@@ -174,7 +95,7 @@ void Bernsteins::find_bernstein_roots(Bezier const &bz,
         }
     }
     // if last control point is zero, that counts as crossing too
-    if (SGN(bz[bz.size()-1]) == 0) { 
+    if (bz[bz.size() - 1] == 0) {
         ++n_crossings;
     }
 
@@ -217,6 +138,10 @@ void Bernsteins::find_bernstein_roots(Bezier const &bz,
         double dsplit_t = 0.5;
         if(!dsolutions.empty()) {
             dsplit_t = dsolutions[0];
+            if (dsplit_t < EPSILON || dsplit_t > 1 - EPSILON) {
+                // Avoid infinite recursion if making no progress.
+                dsplit_t = 0.5;
+            }
             split_t = left_t + (right_t - left_t)*dsplit_t;
             debug(std::cout << "split_value = " << bz(split_t) << std::endl);
             debug(std::cout << "splitting around " << dsplit_t << " = " 
@@ -290,7 +215,7 @@ double Bernsteins::secant(Bezier const &bz) {
     return r;
 }
 
-};
+} // namespace Geom
 
 /*
   Local Variables:

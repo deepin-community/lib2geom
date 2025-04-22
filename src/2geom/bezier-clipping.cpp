@@ -55,7 +55,6 @@ using std::swap;
 #define VERBOSE 0
 #define CHECK 0
 
-
 namespace Geom {
 
 namespace detail { namespace bezier_clipping {
@@ -115,14 +114,6 @@ void range_assertion(int k, int m, int n, const char* msg)
 
 ////////////////////////////////////////////////////////////////////////////////
 //  numerical routines
-
-/*
- * Compute the binomial coefficient (n, k)
- */
-double binomial(unsigned int n, unsigned int k)
-{
-    return choose<double>(n, k);
-}
 
 /*
  * Compute the determinant of the 2x2 matrix with column the point P1, P2
@@ -583,6 +574,8 @@ void distance_control_points (std::vector<Point> & D,
     double bc;
     Point dij;
     std::vector<double> d(F.size());
+    int rci = 1;
+    int b1 = 1;
     for (size_t i = 0; i <= r; ++i)
     {
         for (size_t j = 0; j <= m; ++j)
@@ -591,7 +584,12 @@ void distance_control_points (std::vector<Point> & D,
         }
         const size_t k0 = std::max(i, n) - n;
         const size_t kn = std::min(i, n-1);
-        const double bri = n / binomial(r,i);
+        const double bri = (double)n / rci;
+
+        // assert(rci == binomial(r, i));
+        binomial_increment_k(rci, r, i);
+
+        int b2 = b1;
         for (size_t k = k0; k <= kn; ++k)
         {
             //if (k > i || (i-k) > n) continue;
@@ -599,13 +597,26 @@ void distance_control_points (std::vector<Point> & D,
 #if CHECK
             assert (l <= n);
 #endif
-            bc = bri * binomial(n,l) * binomial(n-1, k);
+            bc = bri * b2;
+
+            // assert(b2 == binomial(n, l) * binomial(n - 1, k));
+            binomial_decrement_k(b2, n, l);
+            binomial_increment_k(b2, n - 1, k);
+
             for (size_t j = 0; j <= m; ++j)
             {
                 //d[j] += bc * dot(dB[k], B[l] - F[j]);
                 d[j] += bc * (dBB(k,l) - dBF(k,j));
             }
         }
+
+        // assert(b1 == binomial(n, i - k0) * binomial(n - 1, k0));
+        if (i < n) {
+            binomial_increment_k(b1, n, i);
+        } else {
+            binomial_increment_k(b1, n - 1, k0);
+        }
+
         double dmin, dmax;
         dmin = dmax = d[m];
         for (size_t j = 0; j < m; ++j)
@@ -1119,8 +1130,7 @@ void find_collinear_normal (std::vector< std::pair<double, double> >& xs,
                             std::vector<Point> const& B,
                             double precision)
 {
-    using detail::bezier_clipping::get_solutions;
-    using detail::bezier_clipping::collinear_normal_tag;
+    using namespace detail::bezier_clipping;
     get_solutions<collinear_normal_tag>(xs, A, B, precision);
 }
 
@@ -1136,20 +1146,21 @@ void find_collinear_normal (std::vector< std::pair<double, double> >& xs,
  *  This routine is based on the Bezier Clipping Algorithm,
  *  see: Sederberg, Nishita, 1990 - Curve intersection using Bezier clipping
  */
-void find_intersections_bezier_clipping (std::vector< std::pair<double, double> >& xs,
-                         std::vector<Point> const& A,
-                         std::vector<Point> const& B,
-                         double precision)
+void find_intersections_bezier_clipping(std::vector<std::pair<double, double>> &xs,
+                                        std::vector<Point> const &A,
+                                        std::vector<Point> const &B,
+                                        double precision)
 {
-    using detail::bezier_clipping::get_solutions;
-    using detail::bezier_clipping::intersection_point_tag;
+    // Handle beziers with identical control points (up to reversal).
+    if (A.size() == B.size() && (A == B || std::equal(A.begin(), A.end(), B.rbegin()))) {
+        return;
+    }
+
+    using namespace detail::bezier_clipping;
     get_solutions<intersection_point_tag>(xs, A, B, precision);
 }
 
-}  // end namespace Geom
-
-
-
+} // namespace Geom
 
 /*
   Local Variables:

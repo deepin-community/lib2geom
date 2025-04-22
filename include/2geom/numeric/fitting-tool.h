@@ -65,13 +65,12 @@ class lsf_base
     typedef typename model_type::parameter_type      parameter_type;
     typedef typename model_type::value_type          value_type;
 
-    lsf_base( model_type const& _model, size_t forecasted_samples )
-        : m_model(_model),
-          m_total_samples(0),
-          m_matrix(forecasted_samples, m_model.size()),
-          m_psdinv_matrix(NULL)
-    {
-    }
+    lsf_base(model_type const &_model, size_t forecasted_samples)
+        : m_model(_model)
+        , m_total_samples(0)
+        , m_matrix(forecasted_samples, m_model.size())
+        , m_psdinv_matrix(nullptr)
+    {}
 
     // compute pseudo inverse
     void update()
@@ -144,12 +143,11 @@ public:
     using base_type::total_samples;
 
 public:
-    lsf_solution<ModelT, double>( model_type const& _model,
-                                  size_t forecasted_samples )
-        : base_type(_model, forecasted_samples),
-          m_solution(_model.size())
-    {
-    }
+    lsf_solution(model_type const &_model,
+                 size_t forecasted_samples)
+        : base_type(_model, forecasted_samples)
+        , m_solution(_model.size())
+    {}
 
     template< typename VectorT >
     solution_type& result(VectorT const& sample_values)
@@ -220,12 +218,11 @@ public:
     using base_type::total_samples;
 
 public:
-    lsf_solution<ModelT, Point>( model_type const& _model,
-                                 size_t forecasted_samples )
-        : base_type(_model, forecasted_samples),
-          m_solution(_model.size(), 2)
-    {
-    }
+    lsf_solution(model_type const &_model,
+                 size_t forecasted_samples)
+        : base_type(_model, forecasted_samples)
+        , m_solution(_model.size(), 2)
+    {}
 
     solution_type& result(std::vector<Point> const& sample_values)
     {
@@ -317,12 +314,11 @@ class lsf_with_fixed_terms<ModelT, false>
     using base_type::m_total_samples;
     using base_type::m_model;
 
-  public:
-      lsf_with_fixed_terms<ModelT, false>( model_type const& _model,
-                                           size_t forecasted_samples )
+public:
+    lsf_with_fixed_terms(model_type const &_model,
+                         size_t forecasted_samples)
         : base_type(_model, forecasted_samples)
-    {
-    }
+    {}
 
     void append(parameter_type const& sample_parameter)
     {
@@ -363,14 +359,14 @@ class lsf_with_fixed_terms<ModelT, true>
     using base_type::m_total_samples;
     using base_type::m_model;
 
-  public:
-    lsf_with_fixed_terms<ModelT, true>( model_type const& _model,
-                                        size_t forecasted_samples )
-        : base_type(_model, forecasted_samples),
-          m_vector(forecasted_samples),
-          m_vector_view(NULL)
-    {
-    }
+public:
+    lsf_with_fixed_terms(model_type const &_model,
+                         size_t forecasted_samples)
+        : base_type(_model, forecasted_samples)
+        , m_vector(forecasted_samples)
+        , m_vector_view(nullptr)
+    {}
+
     void append(parameter_type const& sample_parameter)
     {
         assert(!is_full());
@@ -403,19 +399,17 @@ class lsf_with_fixed_terms<ModelT, true>
     }
 
     
-    ~lsf_with_fixed_terms<model_type, true>() override
+    ~lsf_with_fixed_terms() override
     {
-        if (m_vector_view != NULL)
-        {
+        if (m_vector_view) {
             delete m_vector_view;
         }
     }
 
-  protected:
+protected:
     Vector          m_vector;
     VectorView*     m_vector_view;
-
-}; // end class lsf_with_fixed_terms<ModelT, true>
+};
 
 
 } // end namespace detail
@@ -442,14 +436,12 @@ class least_squeares_fitter<ModelT, ValueType, false>
     typedef typename base_type::value_type              value_type;
     typedef typename base_type::solution_type           solution_type;
 
-  public:
-    least_squeares_fitter<ModelT, ValueType, false>( model_type const& _model,
-                                                     size_t forecasted_samples )
-          : base_type(_model, forecasted_samples)
-  {
-  }
-}; // end class least_squeares_fitter<ModelT, ValueType, true>
-
+public:
+    least_squeares_fitter(model_type const &_model,
+                          size_t forecasted_samples)
+        : base_type(_model, forecasted_samples)
+    {}
+};
 
 template< typename ModelT>
 class least_squeares_fitter<ModelT, double, true>
@@ -475,12 +467,11 @@ class least_squeares_fitter<ModelT, double, true>
         return base_type::result();
     }
 
-  public:
-    least_squeares_fitter<ModelT, double, true>( model_type const& _model,
-                                                 size_t forecasted_samples )
+public:
+    least_squeares_fitter(model_type const &_model,
+                          size_t forecasted_samples)
         : base_type(_model, forecasted_samples)
-    {
-    }
+    {}
 
     template< typename VectorT >
     solution_type& result(VectorT const& sample_values)
@@ -520,12 +511,11 @@ class least_squeares_fitter<ModelT, Point, true>
     }
 
 
-  public:
-    least_squeares_fitter<ModelT, Point, true>( model_type const& _model,
-                                                size_t forecasted_samples )
+public:
+    least_squeares_fitter(model_type const &_model,
+                          size_t forecasted_samples)
         : base_type(_model, forecasted_samples)
-    {
-    }
+    {}
 
     solution_type& result(std::vector<Point> const& sample_values)
     {

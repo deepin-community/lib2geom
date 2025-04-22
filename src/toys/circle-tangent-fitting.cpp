@@ -123,7 +123,7 @@ class CircleFitting : public Toy
 	  model.instance(c, fitter.result(z));
 	  //c.set(psh.pts);
         }
-        catch(RangeError exc)
+        catch (RangeError const &exc)
         {
             std::cerr << exc.what() << std::endl;
             Toy::draw(cr, notify, width, height, save,timer_stream);
@@ -137,7 +137,7 @@ class CircleFitting : public Toy
                 std::unique_ptr<EllipticalArc> eap( c.arc(psh.pts[0], psh.pts[1], psh.pts[3]) );
                 ea = *eap;
             }
-            catch(RangeError exc)
+            catch (RangeError const &exc)
             {
                 std::cerr << exc.what() << std::endl;
                 Toy::draw(cr, notify, width, height, save,timer_stream);

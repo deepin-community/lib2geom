@@ -2,6 +2,11 @@
 
 include /usr/share/dpkg/architecture.mk
 
+ifeq (${DEB_HOST_ARCH_CPU},i386)
+export DEB_CFLAGS_MAINT_APPEND=-fexcess-precision=fast -ffloat-store
+export DEB_CXXFLAGS_MAINT_APPEND=-fexcess-precision=fast -ffloat-store
+endif
+
 %:
 	dh $@ --buildsystem cmake+ninja
 
@@ -9,6 +14,14 @@ override_dh_auto_configure:
 	dh_auto_configure -- \
 		-D2GEOM_BUILD_SHARED=ON \
 		-DCMAKE_SKIP_RPATH:BOOL=ON \
+
+execute_before_dh_auto_build:
+	# If ragel is present then this file will be rebuilt at build time.
+	# Restore the original file on clean if that's the case.
+	# https://bugs.debian.org/1048245
+	set -e; [ ! -e $(shell command -v ragel) ] || \
+		perl -MDebian::Debhelper::Dh_Lib=restore_file_on_clean \
+			-e 'restore_file_on_clean("src/2geom/svg-path-parser.cpp")'
 
 # needed to pass the tests, as without rpath somhow the tests can't find the library anymore
 override_dh_auto_test:

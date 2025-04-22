@@ -3,9 +3,9 @@ cmake_policy(SET CMP0054 NEW)
 
 
 set(2GEOM_MAJOR_VERSION 1)
-set(2GEOM_MINOR_VERSION 2)
-set(2GEOM_PATCH_VERSION 2)
-set(2GEOM_VERSION ${2GEOM_MAJOR_VERSION}.${2GEOM_MINOR_VERSION}.${2GEOM_PATCH_VERSION})
+set(2GEOM_MINOR_VERSION 4)
+set(2GEOM_PATCH_VERSION 0)
+set(2GEOM_VERSION ${2GEOM_MAJOR_VERSION}.${2GEOM_MINOR_VERSION}.${2GEOM_PATCH_VERSION} CACHE INTERNAL "" FORCE)
 set(2GEOM_ABI_VERSION ${2GEOM_MAJOR_VERSION}.${2GEOM_MINOR_VERSION}.0)
 
 project(lib2geom
@@ -17,10 +17,11 @@ project(lib2geom
     )
 
 set(2GEOM_INCLUDE_DIR "${CMAKE_CURRENT_LIST_DIR}/include" CACHE INTERNAL "")
+include_directories("${CMAKE_CURRENT_LIST_DIR}/src/2geom") # for private headers/template support.
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF) # enforces -std=c++17 instead of -std=gnu++17
+set(CMAKE_CXX_EXTENSIONS OFF) # enforces -std=c++20 instead of -std=gnu++20
 set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib)
 set(CMAKE_SKIP_RPATH:BOOL OFF)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/CMakeScripts)
@@ -75,7 +76,6 @@ endif()
 #    )
 
 add_compile_options(-Wall -Wformat-security -Woverloaded-virtual -Wpointer-arith -Werror=return-type)
-add_compile_options(-O2)
 
 # suppress the very annoying "#pragma ms_struct" Clang warning, caused by -mms-bitfield required for GTK
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
@@ -92,6 +92,23 @@ option(WITH_PROFILING
 if(WITH_PROFILING)
     add_compile_options(-pg)
     set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -pg")
+endif()
+
+option(WITH_COVERAGE
+    "Enable generation of code coverage reports."
+    OFF)
+
+if(WITH_COVERAGE)
+    set(GCOVR_ADDITIONAL_ARGS "-s")
+    include(CodeCoverage)
+    set(COVERAGE_EXCLUDES
+        "${PROJECT_SOURCE_DIR}/src/performance-tests/*"
+        "${PROJECT_SOURCE_DIR}/src/py2geom/*"
+        "${PROJECT_SOURCE_DIR}/src/toys/*"
+        "${PROJECT_SOURCE_DIR}/include/toys/*")
+    setup_target_for_coverage_gcovr_xml(NAME coverage_xml EXECUTABLE ctest)
+    setup_target_for_coverage_gcovr_html(NAME coverage_html EXECUTABLE ctest)
+    append_coverage_compiler_flags()
 endif()
 
 option(2GEOM_BUILD_SHARED
@@ -127,11 +144,11 @@ add_custom_target(uninstall_${PROJECT_NAME}
 
 add_subdirectory(src)
 
-
 install(EXPORT 2geom_targets
     FILE 2GeomTargets.cmake
     NAMESPACE 2Geom::
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/2Geom"
+    COMPONENT "lib2geom_dev"
     )
 
 include(CMakePackageConfigHelpers)
@@ -141,10 +158,15 @@ write_basic_package_version_file("2GeomConfigVersion.cmake"
 
 install(FILES "2GeomConfig.cmake" "${CMAKE_CURRENT_BINARY_DIR}/2GeomConfigVersion.cmake"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/2Geom"
+    COMPONENT "lib2geom_dev"
     )
 
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/2geom" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/2geom-${2GEOM_VERSION}")
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/2geom"
+	DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/2geom-${2GEOM_VERSION}"
+	COMPONENT "lib2geom_dev")
 
 configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/2geom.pc.in
                 ${CMAKE_CURRENT_BINARY_DIR}/2geom.pc @ONLY IMMEDIATE )
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/2geom.pc" DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/2geom.pc"
+	DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+	COMPONENT "lib2geom_dev")

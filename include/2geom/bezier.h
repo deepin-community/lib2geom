@@ -40,7 +40,6 @@
 
 #include <algorithm>
 #include <valarray>
-#include <2geom/choose.h>
 #include <2geom/coord.h>
 #include <2geom/d2.h>
 #include <2geom/math-utils.h>
@@ -157,6 +156,25 @@ public:
         return *this;
     }
 
+    bool operator==(Bezier const &other) const
+    {
+        if (degree() != other.degree()) {
+            return false;
+        }
+
+        for (size_t i = 0; i < c_.size(); i++) {
+            if (c_[i] != other.c_[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool operator!=(Bezier const &other) const
+    {
+        return !(*this == other);
+    }
+
     struct Order {
         unsigned order;
         explicit Order(Bezier const &b) : order(b.order()) {}
@@ -264,7 +282,7 @@ public:
     SBasis toSBasis() const;
 
     Coord &operator[](unsigned ix) { return c_[ix]; }
-    Coord const &operator[](unsigned ix) const { return const_cast<std::valarray<Coord>&>(c_)[ix]; }
+    Coord const &operator[](unsigned ix) const { return c_[ix]; }
 
     void setCoeff(unsigned ix, double val) { c_[ix] = val; }
 
@@ -302,10 +320,18 @@ public:
     }
     Bezier &operator+=(Bezier const &other);
     Bezier &operator-=(Bezier const &other);
+
+    /// Unary minus
+    Bezier operator-() const
+    {
+        Bezier result;
+        result.c_ = -c_;
+        return result;
+    }
 };
 
 
-void bezier_to_sbasis (SBasis &sb, Bezier const &bz);
+void bezier_to_sbasis(SBasis &sb, Bezier const &bz);
 
 Bezier operator*(Bezier const &f, Bezier const &g);
 inline Bezier multiply(Bezier const &f, Bezier const &g) {
@@ -339,6 +365,10 @@ OptInterval bounds_fast(Bezier const &b);
 OptInterval bounds_exact(Bezier const &b);
 OptInterval bounds_local(Bezier const &b, OptInterval const &i);
 
+/// Expand an interval to the image of a Bézier-Bernstein polynomial, assuming it already contains the initial point x0.
+void bezier_expand_to_image(Interval &range, Coord x0, Coord x1, Coord x2);
+void bezier_expand_to_image(Interval &range, Coord x0, Coord x1, Coord x2, Coord x3);
+
 inline std::ostream &operator<< (std::ostream &os, const Bezier & b) {
     os << "Bezier(";
     for(unsigned i = 0; i < b.order(); i++) {
@@ -348,7 +378,8 @@ inline std::ostream &operator<< (std::ostream &os, const Bezier & b) {
     return os;
 }
 
-}
+} // namespace Geom
+
 #endif // LIB2GEOM_SEEN_BEZIER_H
 
 /*

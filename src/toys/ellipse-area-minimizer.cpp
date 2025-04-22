@@ -124,7 +124,7 @@ double area_goal(double coeff, void* params)
     {
         e = fitting(points, coeff);
     }
-    catch(LogicalError exc)
+    catch (LogicalError const &exc)
     {
         //std::cerr << exc.what() << std::endl;
         return 1e18;
@@ -143,7 +143,7 @@ double perimeter_goal(double coeff, void* params)
     {
         e = fitting(points, coeff);
     }
-    catch(LogicalError exc)
+    catch (LogicalError const &exc)
     {
         //std::cerr << exc.what() << std::endl;
         return 1e18;
@@ -257,7 +257,7 @@ class EllipseAreaMinimizer : public Toy
             {
                 e = fitting(psh.pts, coeff);
             }
-            catch(LogicalError exc)
+            catch (LogicalError const &exc)
             {
                 std::cerr << exc.what() << std::endl;
                 Toy::draw(cr, notify, width, height, save,timer_stream);

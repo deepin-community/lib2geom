@@ -198,7 +198,7 @@ TEST_F(SBasisTest,Operators) {
     //std::cout << derivative(hump) <<std::endl;
     //std::cout << integral(hump) <<std::endl;
 
-    EXPECT_TRUE(are_equal(derivative(integral(wiggle)), wiggle));
+    EXPECT_TRUE(are_equal(derivative(Geom::integral(wiggle)), wiggle));
     //std::cout << derivative(integral(hump)) << std::endl;
     expect_array((const double []){0.5}, roots(derivative(hump)));
 
@@ -232,6 +232,28 @@ TEST_F(SBasisTest, ToCubicBezier)
         EXPECT_FLOAT_EQ(bz[i][0], params[i]);
         EXPECT_FLOAT_EQ(bz[i][1], params[i]);
     }
+}
+
+TEST_F(SBasisTest, Roundtrip)
+{
+    auto bz1 = Bezier(1, -2, 3, 7, 11, -24, 42, -1, 9, 1);
+    auto sbasis = bz1.toSBasis();
+    Bezier bz2;
+    sbasis_to_bezier(bz2, sbasis);
+    ASSERT_EQ(bz1, bz2);
+
+    std::vector<Point> pts;
+    for (int i = 0; i < bz1.size(); i++) {
+        pts.emplace_back(bz1[i], bz1[i]);
+    }
+    D2<SBasis> sbasis_d2;
+    bezier_to_sbasis(sbasis_d2, pts);
+    ASSERT_EQ(sbasis_d2[X], sbasis);
+    ASSERT_EQ(sbasis_d2[Y], sbasis);
+    D2<Bezier> bz2_d2;
+    sbasis_to_bezier(bz2_d2, sbasis_d2);
+    ASSERT_EQ(bz2_d2[X], bz1);
+    ASSERT_EQ(bz2_d2[Y], bz1);
 }
 
 /*

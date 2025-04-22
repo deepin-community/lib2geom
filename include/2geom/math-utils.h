@@ -37,6 +37,7 @@
 #define LIB2GEOM_SEEN_MATH_UTILS_H
 
 #include <math.h> // sincos is usually only available in math.h
+#include <array>
 #include <cmath>
 #include <utility> // for std::pair
 #include <boost/math/special_functions/fpclassify.hpp>
@@ -66,7 +67,7 @@ template <class T> inline const T& between (const T& min, const T& max, const T&
 
     Implemented in terms of round, i.e. we make no guarantees as to what happens if x is
     half way between two rounded numbers.
-    
+
     Note: places is the number of decimal places without using scientific (e) notation, not the
     number of significant figures.  This function may not be suitable for values of x whose
     magnitude is so far from 1 that one would want to use scientific (e) notation.
@@ -92,6 +93,35 @@ inline void sincos(double angle, double &sin_, double &cos_) {
     sin_ = ::sin(angle);
     cos_ = ::cos(angle);
 #endif
+}
+
+/** @brief Scale the doubles in the passed array to make them "reasonably large".
+ *
+ * All doubles in the passed array will get scaled by the same power of 2 (which is
+ * a lossless operation) in such a way that their geometric average gets closer to 1.
+ *
+ * @tparam N The size of the passed array.
+ * @param[in,out] values The doubles to be rescaled in place.
+ * @return The exponent in the power of two by which the doubles got scaled.
+ */
+template <size_t N>
+inline int rescale_homogenous(std::array<double, N> &values)
+{
+    if constexpr (N == 0) {
+        return 0;
+    }
+    std::array<int, N> exponents;
+    std::array<double, N> mantissas;
+    int average = 0;
+    for (size_t i = 0; i < N; i++) {
+        mantissas[i] = std::frexp(values[i], &exponents[i]);
+        average += exponents[i];
+    }
+    average /= (int)N;
+    for (size_t i = 0; i < N; i++) {
+        values[i] = std::ldexp(mantissas[i], exponents[i] - average);
+    }
+    return -average;
 }
 
 } // end namespace Geom

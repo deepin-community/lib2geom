@@ -174,6 +174,13 @@ public:
     /// Get the tight-fitting bounding box of the ellipse.
     Rect boundsExact() const;
 
+    /** @brief Get a fast to compute bounding box which contains the ellipse.
+     *
+     * The returned rectangle engulfs the ellipse but it may not be the smallest
+     * axis-aligned rectangle with this property.
+     */
+    Rect boundsFast() const;
+
     /// Get the coefficients of the ellipse's implicit equation.
     std::vector<double> coefficients() const;
     void coefficients(Coord &A, Coord &B, Coord &C, Coord &D, Coord &E, Coord &F) const;

@@ -411,6 +411,25 @@ public:
 
     bool decompose (Line& l1, Line& l2) const;
 
+    /**
+     * @brief Division-free decomposition of a degenerate conic section, without
+     *        degeneration test.
+     *
+     * When the conic is degenerate, it consists of 0, 1 or 2 lines in the xy-plane.
+     * This function returns these lines. But it does not check whether the conic
+     * is really degenerate, so calling it on a non-degenerate conic produces a
+     * meaningless result.
+     *
+     * If the number of lines is less than two, the trailing lines in the returned
+     * array will be degenerate. Use Line::isDegenerate() to test for that.
+     *
+     * This version of the decomposition is division-free, which improves numerical
+     * stability compared to decompose().
+     *
+     * @param epsilon The numerical threshold for floating point comparison of discriminants.
+     */
+    std::array<Line, 2> decompose_df(Coord epsilon = EPSILON) const;
+
     /*
      *  Generate a RatQuad object from a conic arc.
      *

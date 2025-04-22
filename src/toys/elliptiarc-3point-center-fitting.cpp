@@ -192,7 +192,7 @@ bool make_elliptical_arc( EllipticalArc & ea,
 		ea.set( initial, rx, ry, rot,
 				large_arc_flag, sweep_flag, final );
 	}
-    catch( RangeError e )
+    catch (RangeError const &e)
     {
     	std::cerr << e.what() << std::endl;
     	return false;

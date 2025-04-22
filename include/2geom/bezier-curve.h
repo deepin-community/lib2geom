@@ -105,11 +105,12 @@ public:
     Point initialPoint() const override { return inner.at0(); }
     Point finalPoint() const override { return inner.at1(); }
     bool isDegenerate() const override;
-    bool isLineSegment() const override { return size() == 2; }
+    bool isLineSegment() const override;
     void setInitial(Point const &v) override { setPoint(0, v); }
     void setFinal(Point const &v) override { setPoint(order(), v); }
     Rect boundsFast() const override { return *bounds_fast(inner); }
     Rect boundsExact() const override { return *bounds_exact(inner); }
+    void expandToTransformed(Rect &bbox, Affine const &transform) const override;
     OptRect boundsLocal(OptInterval const &i, unsigned deg) const override {
         if (!i) return OptRect();
         if(i->min() == 0 && i->max() == 1) return boundsFast();
@@ -122,9 +123,9 @@ public:
     Curve *duplicate() const override {
         return new BezierCurve(*this);
     }
-    Curve *portion(Coord f, Coord t) const override {
-        return new BezierCurve(Geom::portion(inner, f, t));
-    }
+
+    Curve *portion(Coord f, Coord t) const override;
+
     Curve *reverse() const override {
         return new BezierCurve(Geom::reverse(inner));
     }
@@ -167,8 +168,11 @@ public:
     Coord valueAt(Coord t, Dim2 d) const override { return inner[d].valueAt(t); }
     D2<SBasis> toSBasis() const override {return inner.toSBasis(); }
     bool isNear(Curve const &c, Coord precision) const override;
-    bool operator==(Curve const &c) const override;
     void feed(PathSink &sink, bool) const override;
+    std::vector<Coord> timesWithRadiusOfCurvature(double radius) const;
+
+protected:
+    bool _equalTo(Curve const &c) const override;
 };
 
 template <unsigned degree>
@@ -250,7 +254,11 @@ public:
     }
 
     bool isLineSegment() const override {
-        return size() == 2;
+        if constexpr (degree == 1) {
+            return true;
+        } else {
+            return BezierCurve::isLineSegment();
+        }
     }
 
     Curve *duplicate() const override {
@@ -286,6 +294,10 @@ public:
         // call super. this is implemented only to allow specializations
         BezierCurve::feed(sink, moveto_initial);
     }
+    void expandToTransformed(Rect &bbox, Affine const &transform) const override {
+        // call super. this is implemented only to allow specializations
+        BezierCurve::expandToTransformed(bbox, transform);
+    }
 };
 
 // BezierCurveN<0> is meaningless; specialize it out
@@ -319,10 +331,15 @@ template <> inline bool BezierCurveN<1>::isLineSegment() const { return true; }
 template <> Curve *BezierCurveN<1>::derivative() const;
 template <> Coord BezierCurveN<1>::nearestTime(Point const &, Coord, Coord) const;
 template <> std::vector<CurveIntersection> BezierCurveN<1>::intersect(Curve const &, Coord) const;
+template <> std::vector<CurveIntersection> BezierCurveN<2>::intersect(Curve const &, Coord) const;
+template <> std::vector<CurveIntersection> BezierCurveN<3>::intersect(Curve const &, Coord) const;
 template <> int BezierCurveN<1>::winding(Point const &) const;
 template <> void BezierCurveN<1>::feed(PathSink &sink, bool moveto_initial) const;
 template <> void BezierCurveN<2>::feed(PathSink &sink, bool moveto_initial) const;
 template <> void BezierCurveN<3>::feed(PathSink &sink, bool moveto_initial) const;
+template <> void BezierCurveN<1>::expandToTransformed(Rect &bbox, Affine const &transform) const;
+template <> void BezierCurveN<2>::expandToTransformed(Rect &bbox, Affine const &transform) const;
+template <> void BezierCurveN<3>::expandToTransformed(Rect &bbox, Affine const &transform) const;
 
 inline Point middle_point(LineSegment const& _segment) {
     return ( _segment.initialPoint() + _segment.finalPoint() ) / 2;

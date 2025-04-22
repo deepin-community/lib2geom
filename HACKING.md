@@ -46,8 +46,8 @@ make test
 
 # Adding a unit test
 Make sure you write it using GTest syntax - look at e.g.
-[src/tests/affine-test.cpp](src/tests/affine-test.cpp).
+[tests/affine-test.cpp](tests/affine-test.cpp).
 
 To add the test to the build, add the test to
-[src/tests/CMakeLists.txt](src/tests/CMakeLists.txt) in under
+[tests/CMakeLists.txt](tests/CMakeLists.txt) in under
 `SET(2GEOM_GTESTS_SRC)`.

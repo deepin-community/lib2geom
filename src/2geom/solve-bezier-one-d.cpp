@@ -1,4 +1,3 @@
-
 #include <2geom/solver.h>
 #include <2geom/choose.h>
 #include <2geom/bezier.h>
@@ -6,46 +5,38 @@
 
 #include <cmath>
 #include <algorithm>
-//#include <valarray>
 
 /*** Find the zeros of the bernstein function.  The code subdivides until it is happy with the
  * linearity of the function.  This requires an O(degree^2) subdivision for each step, even when
  * there is only one solution.
  */
 
-namespace Geom{
+namespace Geom {
+namespace {
 
-template<class t>
-static int SGN(t x) { return (x > 0 ? 1 : (x < 0 ? -1 : 0)); }
-
-//const unsigned MAXDEPTH = 23; // Maximum depth for recursion.  Using floats means 23 bits precision max
-
-//const double BEPSILON = ldexp(1.0,(-MAXDEPTH-1)); /*Flatness control value */
-//const double SECANT_EPSILON = 1e-13; // secant method converges much faster, get a bit more precision
 /**
  * This function is called _a lot_.  We have included various manual memory management stuff to reduce the amount of mallocing that goes on.  In the future it is possible that this will hurt performance.
  **/
-class Bernsteins{
-public:
-    static const size_t MAX_DEPTH = 53;
+struct Bernsteins
+{
+    static constexpr size_t MAX_DEPTH = 53;
     size_t degree, N;
     std::vector<double> &solutions;
-    //std::vector<double> bc;
-    BinomialCoefficient<double> bc;
 
-    Bernsteins(size_t _degree, std::vector<double> & sol)
-        : degree(_degree), N(degree+1), solutions(sol), bc(degree)
-    {
-    }
-
-    unsigned
-    control_poly_flat_enough(double const *V);
+    Bernsteins(size_t _degree, std::vector<double> &sol)
+        : degree{_degree}
+        , N{degree + 1}
+        , solutions{sol}
+    {}
 
     void
     find_bernstein_roots(double const *w, /* The control points  */
                          unsigned depth,  /* The depth of the recursion */
                          double left_t, double right_t);
 };
+
+} // namespace
+
 /*
  *  find_bernstein_roots : Given an equation in Bernstein-Bernstein form, find all
  *    of the roots in the open interval (0, 1).  Return the number of roots found.
@@ -72,22 +63,19 @@ find_bernstein_roots(std::vector<double> &solutions, /* RETURN candidate t-value
     B.find_bernstein_roots(w, 0, left_t, right_t);
 }
 
-
-
 void Bernsteins::find_bernstein_roots(double const *w, /* The control points  */
                           unsigned depth,    /* The depth of the recursion */
                           double left_t,
                           double right_t)
 {
-
     size_t n_crossings = 0;
 
-    int old_sign = SGN(w[0]);
+    int old_sign = Geom::sgn(w[0]);
     //std::cout << "w[0] = " << w[0] << std::endl;
     for (size_t i = 1; i < N; i++)
     {
         //std::cout << "w[" << i << "] = " << w[i] << std::endl;
-        int sign = SGN(w[i]);
+        int sign = Geom::sgn(w[i]);
         if (sign != 0)
         {
             if (sign != old_sign && old_sign != 0)
@@ -148,9 +136,6 @@ void Bernsteins::find_bernstein_roots(double const *w, /* The control points  */
     }
 
     /* Otherwise, solve recursively after subdividing control polygon  */
-//    double Left[N], /* New left and right  */
-//           Right[N];    /* control polygons  */
-    //const double t = 0.5;
     double* LR = new double[2*N];
     double* Left = LR;
     double* Right = LR + N;
@@ -183,55 +168,7 @@ void Bernsteins::find_bernstein_roots(double const *w, /* The control points  */
     delete[] LR;
 }
 
-#if 0
-/*
- *  control_poly_flat_enough :
- *	Check if the control polygon of a Bernstein curve is flat enough
- *	for recursive subdivision to bottom out.
- *
- */
-unsigned
-Bernsteins::control_poly_flat_enough(double const *V)
-{
-    /* Find the perpendicular distance from each interior control point to line connecting V[0] and
-     * V[degree] */
-
-    /* Derive the implicit equation for line connecting first */
-    /*  and last control points */
-    const double a = V[0] - V[degree];
-
-    double max_distance_above = 0.0;
-    double max_distance_below = 0.0;
-    double ii = 0, dii = 1./degree;
-    for (unsigned i = 1; i < degree; i++) {
-        ii += dii;
-        /* Compute distance from each of the points to that line */
-        const double d = (a + V[i]) * ii  - a;
-        double dist = d*d;
-    // Find the largest distance
-        if (d < 0.0)
-            max_distance_below = std::min(max_distance_below, -dist);
-        else
-            max_distance_above = std::max(max_distance_above, dist);
-    }
-
-    const double abSquared = 1./((a * a) + 1);
-
-    const double intercept_1 = (a - max_distance_above * abSquared);
-    const double intercept_2 = (a - max_distance_below * abSquared);
-
-    /* Compute bounding interval*/
-    const double left_intercept = std::min(intercept_1, intercept_2);
-    const double right_intercept = std::max(intercept_1, intercept_2);
-
-    const double error = 0.5 * (right_intercept - left_intercept);
-    //printf("error %g %g %g\n", error, a, BEPSILON * a);
-    return error < BEPSILON * a;
-}
-#endif
-
-
-};
+} // namespace Geom
 
 /*
   Local Variables:

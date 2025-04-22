@@ -36,75 +36,84 @@
 
 namespace Geom {
 
-// XXX: Can we keep only the left terms easily?
-// this would more than halve the array
-// row index becomes n2 = n/2, row2 = n2*(n2+1)/2, row = row2*2+(n&1)?n2:0
-// we could also leave off the ones
-
+/**
+ * @brief Given a multiple of binomial(n, k), modify it to the same multiple of binomial(n + 1, k).
+ */
 template <typename T>
-T choose(unsigned n, unsigned k) {
-    static std::vector<T> pascals_triangle;
-    static unsigned rows_done = 0;
-    // indexing is (0,0,), (1,0), (1,1), (2, 0)...
-    // to get (i, j) i*(i+1)/2 + j
-    if(/*k < 0 ||*/ k > n) return 0;
-    if(rows_done <= n) {// we haven't got there yet
-        if(rows_done == 0) {
-            pascals_triangle.push_back(1);
-            rows_done = 1;
-        }
-        while(rows_done <= n) {
-            unsigned p = pascals_triangle.size() - rows_done;
-            pascals_triangle.push_back(1);
-            for(unsigned i = 0; i < rows_done-1; i++) {
-                pascals_triangle.push_back(pascals_triangle[p]
-                                           + pascals_triangle[p+1]);
-		p++;
-            }
-            pascals_triangle.push_back(1);
-            rows_done ++;
-        }
-    }
-    unsigned row = (n*(n+1))/2;
-    return pascals_triangle[row+k];
+constexpr void binomial_increment_n(T &b, int n, int k)
+{
+    b = b * (n + 1) / (n + 1 - k);
 }
 
-// Is it faster to store them or compute them on demand?
-/*template <typename T>
-T choose(unsigned n, unsigned k) {
-	T r = 1;
-	for(unsigned i = 1; i <= k; i++)
-		r = (r*(n-k+i))/i;
-	return r;
-	}*/
+/**
+ * @brief Given a multiple of binomial(n, k), modify it to the same multiple of binomial(n - 1, k).
+ */
+template <typename T>
+constexpr void binomial_decrement_n(T &b, int n, int k)
+{
+    b = b * (n - k) / n;
+}
 
+/**
+ * @brief Given a multiple of binomial(n, k), modify it to the same multiple of binomial(n, k + 1).
+ */
+template <typename T>
+constexpr void binomial_increment_k(T &b, int n, int k)
+{
+    b = b * (n - k) / (k + 1);
+}
 
+/**
+ * @brief Given a multiple of binomial(n, k), modify it to the same multiple of binomial(n, k - 1).
+ */
+template <typename T>
+constexpr void binomial_decrement_k(T &b, int n, int k)
+{
+    b = b * k / (n + 1 - k);
+}
 
+/**
+ * @brief Calculate the (n, k)th binomial coefficient.
+ */
+template <typename T>
+constexpr T choose(unsigned n, unsigned k)
+{
+    if (k > n) {
+        return 0;
+    }
+    T b = 1;
+    int max = std::min(k, n - k);
+    for (int i = 0; i < max; i++) {
+        binomial_increment_k(b, n, i);
+    }
+    return b;
+}
+
+/**
+ * @brief Class for calculating and accessing a row of Pascal's triangle.
+ */
 template <typename ValueType>
 class BinomialCoefficient
 {
-  public:
-    typedef ValueType value_type;
-    typedef std::vector<value_type> container_type;
+public:
+    using value_type = ValueType;
+    using container_type = std::vector<value_type>;
 
     BinomialCoefficient(unsigned int _n)
-        : n(_n), m(n >> 1)
+        : n(_n)
     {
-        coefficients.reserve(m+1);
-        coefficients.push_back(1);
-        int h = m + 1;
-        value_type bct = 1;
-        for (int i = 1; i < h; ++i)
-        {
-            bct *= (n-i+1);
-            bct /= i;
-            coefficients.push_back(bct);
+        coefficients.reserve(n / 2 + 1);
+        coefficients.emplace_back(1);
+        value_type b = 1;
+        for (int i = 0; i < n / 2; i++) {
+            binomial_increment_k(b, n, i);
+            coefficients.emplace_back(b);
         }
     }
 
     unsigned int size() const
     {
-        return degree() +1;
+        return degree() + 1;
     }
 
     unsigned int degree() const
@@ -112,19 +121,17 @@ class BinomialCoefficient
         return n;
     }
 
-    value_type operator[] (unsigned int k) const
+    value_type operator[](unsigned int k) const
     {
-        if (k > m)  k = n - k;
-        return coefficients[k];
+        return coefficients[std::min(k, n - k)];
     }
 
-  private:
-    const int n;
-    const unsigned int m;
+private:
+    int const n;
     container_type coefficients;
 };
 
-} // end namespace Geom
+} // namespace Geom
 
 #endif // LIB2GEOM_SEEN_CHOOSE_H
 

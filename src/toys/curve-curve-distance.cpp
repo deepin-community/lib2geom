@@ -81,23 +81,21 @@ class CurvePortion
 };
 
 template<>
-class CurvePortion< D2<SBasis> >
+class CurvePortion<D2<SBasis>>
 {
-  public:
-    CurvePortion< D2<SBasis> >(const D2<SBasis> & curve, double from, double to)
+public:
+    CurvePortion(D2<SBasis> const &curve, double from, double to)
         : m_curve(portion(curve, from, to))
-    {
-    }
+    {}
 
-    D2<SBasis> & get_curve()
+    D2<SBasis> &get_curve()
     {
         return m_curve;
     }
 
-  private:
+private:
     D2<SBasis> m_curve;
 };
-
 
 template< typename Curve01T, typename CurveT >
 class distance_impl

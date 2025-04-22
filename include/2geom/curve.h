@@ -156,9 +156,15 @@ public:
     virtual Rect boundsFast() const = 0;
 
     /** @brief Compute the curve's exact bounding box.
-     * This method can be dramatically slower than boundsExact() depending on the curve type.
+     * This method can be dramatically slower than boundsFast() depending on the curve type.
      * @return The smallest possible rectangle containing all of the curve's points. */
     virtual Rect boundsExact() const = 0;
+
+    /** @brief Expand the given rectangle to include the transformed curve,
+     * assuming it already contains its initial point.
+     * @param bbox[in,out] bbox The rectangle to expand; it is assumed to already contain (initialPoint() * transform).
+     * @param transform The transform to apply to the curve before taking its bounding box. */
+    virtual void expandToTransformed(Rect &bbox, Affine const &transform) const = 0;
 
     // I have no idea what the 'deg' parameter is for, so this is undocumented for now.
     virtual OptRect boundsLocal(OptInterval const &i, unsigned deg) const = 0;
@@ -331,7 +337,7 @@ public:
      * the same value. This means non-degenerate curves are not equal to their reverses.
      * Note that this tests for exact equality.
      * @return True if the curves are identical, false otherwise */
-    virtual bool operator==(Curve const &c) const = 0;
+    bool operator==(Curve const &c) const { return _equalTo(c); }
 
     /** @brief Test whether two curves are approximately the same. */
     virtual bool isNear(Curve const &c, Coord precision) const = 0;
@@ -339,6 +345,9 @@ public:
     /** @brief Feed the curve to a PathSink */
     virtual void feed(PathSink &sink, bool moveto_initial) const;
     /// @}
+
+protected:
+    virtual bool _equalTo(Curve const &c) const = 0;
 };
 
 inline

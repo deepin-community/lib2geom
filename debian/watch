@@ -1,3 +1,4 @@
 version=4
 
-https://gitlab.com/inkscape/lib2geom/-/tags .*/archive/@ANY_VERSION@/@PACKAGE@-.*@ARCHIVE_EXT@
+opts=searchmode=plain \
+https://gitlab.com/inkscape/lib2geom/-/tags /inkscape/lib2geom/-/archive/@ANY_VERSION@/@PACKAGE@-[\d.]+.tar.bz2

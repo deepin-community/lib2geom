@@ -212,6 +212,30 @@ TEST_F(IntersectionGraphTest, RhombusInSquare) {
     checkRandomPoints(square, rhombus, s2, B_MINUS_A);
 }
 
+TEST_F(IntersectionGraphTest, EmptyOperand) {
+    PathVector square = string_to_path("M 0,0 L 20, 0 L 20, 20 L 0, 20 Z");
+    PathVector empty;
+
+    auto graph = PathIntersectionGraph(square, empty);
+    // Taking union with the empty set should be a no-op: A ∪ ∅ = A
+    PathVector u = graph.getUnion();
+    EXPECT_EQ(u.size(), 1u);
+    EXPECT_EQ(u.curveCount(), 4u);
+
+    // Intersection with empty should produce empty: A ∩ ∅ = ∅
+    PathVector i = graph.getIntersection();
+    EXPECT_EQ(i.size(), 0u);
+
+    // Subtracting empty set should be a no-op: A ∖ ∅ = A
+    PathVector rd = graph.getAminusB();
+    EXPECT_EQ(rd.size(), 1u);
+    EXPECT_EQ(rd.curveCount(), 4u);
+
+    // Subtracting FROM the empty set should produce the empty set: ∅ ∖ A = ∅
+    PathVector ld = graph.getBminusA();
+    EXPECT_EQ(ld.size(), 0u);
+}
+
 // this test is disabled, since we cannot handle overlapping segments for now.
 #if 0
 TEST_F(IntersectionGraphTest, EqualUnionAndIntersection) {

@@ -77,7 +77,7 @@ class EAFittingToy : public Toy
         	cairo_d2_sb(cr, easb);
         	cairo_stroke(cr);
     	}
-        catch( RangeError e )
+        catch (RangeError const &e)
         {
         	std::cerr << e.what() << std::endl;
         	Toy::draw(cr, notify, width, height, save,timer_stream);

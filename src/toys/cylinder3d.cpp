@@ -48,10 +48,8 @@ class Box3d: public Toy {
     
     void draw(cairo_t *cr, std::ostringstream *notify, int width, int height, bool save, std::ostringstream *timer_stream) override {
         orig = hand.pts[7];
-	
-        Geom::Point dir(1,-2);
 
-	cairo_set_source_rgba (cr, 0., 0.125, 0, 1);
+        cairo_set_source_rgba (cr, 0., 0.125, 0, 1);
 
         // draw vertical lines for the VP sliders and keep the sliders at their horizontal positions
         draw_slider_lines (cr);

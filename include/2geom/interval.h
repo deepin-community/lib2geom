@@ -9,7 +9,7 @@
  *   Nathan Hurst <njh@mail.csse.monash.edu.au>
  *   bulia byak <buliabyak@users.sf.net>
  *   MenTaLguY <mental@rydia.net>
- * 
+ *
  * This library is free software; you can redistribute it and/or
  * modify it either under the terms of the GNU Lesser General Public
  * License version 2.1 as published by the Free Software Foundation
@@ -46,7 +46,7 @@
 
 namespace Geom {
 
-/** 
+/**
  * @brief Range of real numbers that is never empty.
  *
  * Intervals are closed ranges \f$[a, b]\f$, which means they include their endpoints.
@@ -57,19 +57,19 @@ namespace Geom {
 class Interval
     : public GenericInterval<Coord>
 {
-    typedef GenericInterval<Coord> Base;
+    using Base = GenericInterval<Coord>;
 public:
     /// @name Create intervals.
     /// @{
     /** @brief Create an interval that contains only zero. */
-    Interval() {}
+    constexpr Interval() = default;
     /** @brief Create an interval that contains a single point. */
-    explicit Interval(Coord u) : Base(u) {}
+    explicit constexpr Interval(Coord u) : Base(u) {}
     /** @brief Create an interval that contains all points between @c u and @c v. */
-    Interval(Coord u, Coord v) : Base(u,v) {}
+    constexpr Interval(Coord u, Coord v) : Base(u, v) {}
     /** @brief Convert from integer interval */
-    Interval(IntInterval const &i) : Base(i.min(), i.max()) {}
-    Interval(Base const &b) : Base(b) {}
+    constexpr Interval(IntInterval const &i) : Base(i.min(), i.max()) {}
+    constexpr Interval(Base const &b) : Base(b) {}
 
     /** @brief Create an interval containing a range of values.
      * The resulting interval will contain all values from the given range.
@@ -80,13 +80,11 @@ public:
      * @return Interval that contains all values from [start, end). */
     template <typename InputIterator>
     static Interval from_range(InputIterator start, InputIterator end) {
-        Interval result = Base::from_range(start, end);
-        return result;
+        return Base::from_range(start, end);
     }
     /** @brief Create an interval from a C-style array of values it should contain. */
     static Interval from_array(Coord const *c, unsigned n) {
-        Interval result = from_range(c, c+n);
-        return result;
+        return Base::from_array(c, n);
     }
     /// @}
 
@@ -98,16 +96,16 @@ public:
     }
     /** @brief Map the interval [0,1] onto this one.
      * This method simply performs 1D linear interpolation between endpoints. */
-    Coord valueAt(Coord t) {
+    constexpr Coord valueAt(Coord t) const {
         return lerp(t, min(), max());
     }
     /** @brief Compute a time value that maps to the given value.
      * The supplied value does not need to be in the interval for this method to work. */
-    Coord timeAt(Coord v) {
+    constexpr Coord timeAt(Coord v) const {
         return (v - min()) / extent();
     }
     /// Find closest time in [0,1] that maps to the given value. */
-    Coord nearestTime(Coord v) {
+    constexpr Coord nearestTime(Coord v) const {
         if (v <= min()) return 0;
         if (v >= max()) return 1;
         return timeAt(v);
@@ -118,21 +116,21 @@ public:
     /// @{
     /** @brief Check whether the interior of the interval includes this number.
      * Interior means all numbers in the interval except its ends. */
-    bool interiorContains(Coord val) const { return min() < val && val < max(); }
+    constexpr bool interiorContains(Coord val) const { return min() < val && val < max(); }
     /** @brief Check whether the interior of the interval includes the given interval.
      * Interior means all numbers in the interval except its ends. */
-    bool interiorContains(Interval const &val) const { return min() < val.min() && val.max() < max(); }
+    constexpr bool interiorContains(Interval const &val) const { return min() < val.min() && val.max() < max(); }
     /// Check whether the number is contained in the union of the interior and the lower boundary.
-    bool lowerContains(Coord val) { return min() <= val && val < max(); }
+    constexpr bool lowerContains(Coord val) const { return min() <= val && val < max(); }
     /// Check whether the given interval is contained in the union of the interior and the lower boundary.
-    bool lowerContains(Interval const &val) const { return min() <= val.min() && val.max() < max(); }
+    constexpr bool lowerContains(Interval const &val) const { return min() <= val.min() && val.max() < max(); }
     /// Check whether the number is contained in the union of the interior and the upper boundary.
-    bool upperContains(Coord val) { return min() < val && val <= max(); }
+    constexpr bool upperContains(Coord val) { return min() < val && val <= max(); }
     /// Check whether the given interval is contained in the union of the interior and the upper boundary.
-    bool upperContains(Interval const &val) const { return min() < val.min() && val.max() <= max(); }
+    constexpr bool upperContains(Interval const &val) const { return min() < val.min() && val.max() <= max(); }
     /** @brief Check whether the interiors of the intervals have any common elements.
      * A single point in common is not considered an intersection. */
-    bool interiorIntersects(Interval const &val) const {
+    constexpr bool interiorIntersects(Interval const &val) const {
         return std::max(min(), val.min()) < std::min(max(), val.max());
     }
     /// @}
@@ -141,26 +139,26 @@ public:
     /// @{
     // IMPL: ScalableConcept
     /** @brief Scale an interval */
-    Interval &operator*=(Coord s) {
+    constexpr Interval &operator*=(Coord s) {
         using std::swap;
         _b[0] *= s;
         _b[1] *= s;
-        if(s < 0) swap(_b[0], _b[1]);
+        if (s < 0) swap(_b[0], _b[1]);
         return *this;
     }
     /** @brief Scale an interval by the inverse of the specified value */
-    Interval &operator/=(Coord s) {
+    constexpr Interval &operator/=(Coord s) {
         using std::swap;
         _b[0] /= s;
         _b[1] /= s;
-        if(s < 0) swap(_b[0], _b[1]);
+        if (s < 0) swap(_b[0], _b[1]);
         return *this;
     }
     /** @brief Multiply two intervals.
      * Product is defined as the set of points that can be obtained by multiplying
      * any value from the second operand by any value from the first operand:
      * \f$S = \{x \in A, y \in B: x * y\}\f$ */
-    Interval &operator*=(Interval const &o) {
+    constexpr Interval &operator*=(Interval const &o) {
         // TODO implement properly
         Coord mn = min(), mx = max();
         expandTo(mn * o.min());
@@ -169,27 +167,25 @@ public:
         expandTo(mx * o.max());
         return *this;
     }
-    bool operator==(IntInterval const &ii) const {
+    constexpr bool operator==(IntInterval const &ii) const {
         return min() == Coord(ii.min()) && max() == Coord(ii.max());
     }
-    bool operator==(Interval const &other) const {
+    constexpr bool operator==(Interval const &other) const {
         return Base::operator==(other);
     }
     /// @}
-    
+
     /// @name Rounding to integer values
     /// @{
     /** @brief Return the smallest integer interval which contains this one. */
     IntInterval roundOutwards() const {
-        IntInterval ret(floor(min()), ceil(max()));
-        return ret;
+        return IntInterval(floor(min()), ceil(max()));
     }
     /** @brief Return the largest integer interval which is contained in this one. */
     OptIntInterval roundInwards() const {
         IntCoord u = ceil(min()), v = floor(max());
-        if (u > v) { OptIntInterval e; return e; }
-        IntInterval ret(u, v);
-        return ret;
+        if (u > v) return {};
+        return IntInterval(u, v);
     }
     /// @}
 };
@@ -201,37 +197,40 @@ public:
 class OptInterval
     : public GenericOptInterval<Coord>
 {
-    typedef GenericOptInterval<Coord> Base;
+    using Base = GenericOptInterval<Coord>;
 public:
     using Base::Base;
     using Base::operator==;
     using Base::operator!=;
 
-    OptInterval(Base const &b) : Base(b) {}
+    constexpr OptInterval(Base const &b) : Base(b) {}
 
     /** @brief Promote from IntInterval. */
-    OptInterval(IntInterval const &i) : Base(Interval(i)) {}
+    constexpr OptInterval(IntInterval const &i) : Base(Interval(i)) {}
     /** @brief Promote from OptIntInterval. */
-    OptInterval(OptIntInterval const &i) : Base() {
+    constexpr OptInterval(OptIntInterval const &i) {
         if (i) *this = Interval(*i);
     }
 };
 
 // functions required for Python bindings
-inline Interval unify(Interval const &a, Interval const &b)
-{
-    Interval r = a | b;
-    return r;
+inline Interval unify(Interval const &a, Interval const &b) {
+    return a | b;
 }
-inline OptInterval intersect(Interval const &a, Interval const &b)
-{
-    OptInterval r = a & b;
-    return r;
+inline OptInterval intersect(Interval const &a, Interval const &b) {
+    return a & b;
 }
 
-} // end namespace Geom
+} // namespace Geom
 
-#endif //SEEN_INTERVAL_H
+// Structured binding support
+template <> struct std::tuple_size<Geom::Interval> : std::integral_constant<size_t, 2> {};
+template <size_t I> struct std::tuple_element<I, Geom::Interval> { using type = Geom::Coord; };
+
+// Hash support
+template <> struct std::hash<Geom::Interval> : std::hash<Geom::GenericInterval<Geom::Coord>> {};
+
+#endif // LIB2GEOM_SEEN_INTERVAL_H
 
 /*
   Local Variables:

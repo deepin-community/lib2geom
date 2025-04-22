@@ -45,18 +45,18 @@ namespace Geom {
 
 /** @brief 2D axis enumeration (X or Y).
  * @ingroup Primitives */
-enum Dim2 { X=0, Y=1 };
+enum Dim2 { X = 0, Y = 1 };
 
 /** @brief Get the other (perpendicular) dimension.
  * @ingroup Primitives */
-inline Dim2 other_dimension(Dim2 d) { return d == Y ? X : Y; }
+constexpr Dim2 other_dimension(Dim2 d) { return static_cast<Dim2>(static_cast<int>(d) ^ 1); }
 
 // TODO: make a smarter implementation with C++11
 template <typename T>
 struct D2Traits {
-    typedef typename T::D1Value D1Value;
-    typedef typename T::D1Reference D1Reference;
-    typedef typename T::D1ConstReference D1ConstReference;
+    using D1Value = typename T::D1Value;
+    using D1Reference = typename T::D1Reference;
+    using D1ConstReference = typename T::D1ConstReference;
 };
 
 /** @brief Axis extraction functor.
@@ -64,8 +64,8 @@ struct D2Traits {
  * @ingroup Utilities */
 template <Dim2 D, typename T>
 struct GetAxis {
-    typedef typename D2Traits<T>::D1Value result_type;
-    typedef T argument_type;
+    using result_type = typename D2Traits<T>::D1Value;
+    using argument_type = T;
     typename D2Traits<T>::D1Value operator()(T const &a) const {
         return a[D];
     }
@@ -73,28 +73,28 @@ struct GetAxis {
 
 /** @brief Floating point type used to store coordinates.
  * @ingroup Primitives */
-typedef double Coord;
+using Coord = double;
 
 /** @brief Type used for integral coordinates.
  * @ingroup Primitives */
-typedef int IntCoord;
+using IntCoord = int;
 
 /** @brief Default "acceptably small" value.
  * @ingroup Primitives */
-const Coord EPSILON = 1e-6; //1e-18;
+constexpr Coord EPSILON = 1e-6;
 
 /** @brief Get a value representing infinity.
  * @ingroup Primitives */
-inline Coord infinity() {  return std::numeric_limits<Coord>::infinity();  }
+constexpr Coord infinity() { return std::numeric_limits<Coord>::infinity(); }
 
 /** @brief Nearness predicate for values.
  * @ingroup Primitives */
-inline bool are_near(Coord a, Coord b, double eps=EPSILON) { return a-b <= eps && a-b >= -eps; }
-inline bool rel_error_bound(Coord a, Coord b, double eps=EPSILON) { return a <= eps*b && a >= -eps*b; }
+inline bool are_near(Coord a, Coord b, double eps = EPSILON) { return std::abs(a - b) <= eps; }
+inline bool rel_error_bound(Coord a, Coord b, double eps = EPSILON) { return std::abs(a) <= eps * b; }
 
 /** @brief Numerically stable linear interpolation.
  * @ingroup Primitives */
-inline Coord lerp(Coord t, Coord a, Coord b) {
+constexpr Coord lerp(Coord t, Coord a, Coord b) {
     return (1 - t) * a + t * b;
 }
 
@@ -103,24 +103,22 @@ inline Coord lerp(Coord t, Coord a, Coord b) {
  * @ingroup Utilities */
 template <typename C>
 struct CoordTraits {
-    typedef D2<C> PointType;
-    typedef GenericInterval<C> IntervalType;
-    typedef GenericOptInterval<C> OptIntervalType;
-    typedef GenericRect<C> RectType;
-    typedef GenericOptRect<C> OptRectType;
+    using PointType = D2<C>;
+    using IntervalType = GenericInterval<C>;
+    using OptIntervalType = GenericOptInterval<C>;
+    using RectType = GenericRect<C>;
+    using OptRectType = GenericOptRect<C>;
 
-    typedef
+    using IntervalOps =
       boost::equality_comparable< IntervalType
     , boost::orable< IntervalType
-      > >
-        IntervalOps;
+      >>;
 
-    typedef
+    using RectOps =
       boost::equality_comparable< RectType
     , boost::orable< RectType
     , boost::orable< RectType, OptRectType
-      > > >
-        RectOps;
+      >>>;
 };
 
 // NOTE: operator helpers for Rect and Interval are defined here.
@@ -128,56 +126,52 @@ struct CoordTraits {
 
 template<>
 struct CoordTraits<IntCoord> {
-    typedef IntPoint PointType;
-    typedef IntInterval IntervalType;
-    typedef OptIntInterval OptIntervalType;
-    typedef IntRect RectType;
-    typedef OptIntRect OptRectType;
+    using PointType = IntPoint;
+    using IntervalType = IntInterval;
+    using OptIntervalType = OptIntInterval;
+    using RectType = IntRect;
+    using OptRectType = OptIntRect;
 
-    typedef
+    using IntervalOps =
       boost::equality_comparable< IntInterval
     , boost::additive< IntInterval
     , boost::additive< IntInterval, IntCoord
     , boost::orable< IntInterval
-      > > > >
-        IntervalOps;
+      >>>>;
 
-    typedef
+    using RectOps =
       boost::equality_comparable< IntRect
     , boost::orable< IntRect
     , boost::orable< IntRect, OptIntRect
     , boost::additive< IntRect, IntPoint
-      > > > >
-        RectOps;
+      >>>>;
 };
 
 template<>
 struct CoordTraits<Coord> {
-    typedef Point PointType;
-    typedef Interval IntervalType;
-    typedef OptInterval OptIntervalType;
-    typedef Rect RectType;
-    typedef OptRect OptRectType;
+    using PointType = Point;
+    using IntervalType = Interval;
+    using OptIntervalType = OptInterval;
+    using RectType = Rect;
+    using OptRectType = OptRect;
 
-    typedef
+    using IntervalOps =
       boost::equality_comparable< Interval
     , boost::equality_comparable< Interval, IntInterval
     , boost::additive< Interval
     , boost::multipliable< Interval
     , boost::orable< Interval
     , boost::arithmetic< Interval, Coord
-      > > > > > >
-        IntervalOps;
+      >>>>>>;
 
-    typedef
+    using RectOps =
       boost::equality_comparable< Rect
     , boost::equality_comparable< Rect, IntRect
     , boost::orable< Rect
     , boost::orable< Rect, OptRect
     , boost::additive< Rect, Point
     , boost::multipliable< Rect, Affine
-      > > > > > >
-        RectOps;
+      >>>>>>;
 };
 
 /** @brief Convert coordinate to shortest possible string.
@@ -198,7 +192,7 @@ std::string format_coord_nice(Coord x);
  * @relates Coord */
 Coord parse_coord(std::string const &s);
 
-} // end namespace Geom
+} // namespace Geom
 
 #endif // LIB2GEOM_SEEN_COORD_H
 

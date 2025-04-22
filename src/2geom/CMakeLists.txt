@@ -17,6 +17,14 @@ else()
     message(STATUS "Ragel NOT found. Using stale ${SVG_PARSER_CPP}.")
 endif()
 
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${SVG_PARSER_CPP}"
+                   COMMAND "${CMAKE_COMMAND}"
+                       "-DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/${SVG_PARSER_CPP}"
+                       "-DTARGET=${CMAKE_CURRENT_BINARY_DIR}/${SVG_PARSER_CPP}"
+                       "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+                       -P "${CMAKE_MODULE_PATH}/RewriteLineMarkers.cmake"
+                   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${SVG_PARSER_CPP}"
+                   COMMENT "Rewriting #line markers in ${SVG_PARSER_CPP}")
 
 add_library(2geom ${LIB_TYPE}
     # sources
@@ -55,6 +63,8 @@ add_library(2geom ${LIB_TYPE}
     numeric/matrix.cpp
 
     parallelogram.cpp
+    parting-point.cpp
+    path-extrema.cpp
     path-intersection.cpp
     path-sink.cpp
     path.cpp
@@ -73,10 +83,11 @@ add_library(2geom ${LIB_TYPE}
     sbasis-roots.cpp
     sbasis-to-bezier.cpp
     sbasis.cpp
+    self-intersect.cpp
     solve-bezier.cpp
     solve-bezier-one-d.cpp
     solve-bezier-parametric.cpp
-    svg-path-parser.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/${SVG_PARSER_CPP}
     svg-path-writer.cpp
     sweep-bounds.cpp
 
@@ -85,6 +96,10 @@ add_library(2geom ${LIB_TYPE}
     utils.cpp
 
     # headers (for IDE support only)
+    # private:
+    planar-graph.h
+
+    # public:
     ${2GEOM_INCLUDE_DIR}/2geom/affine.h
     ${2GEOM_INCLUDE_DIR}/2geom/angle.h
 
@@ -184,9 +199,16 @@ set_target_properties(2geom PROPERTIES SOVERSION "${2GEOM_ABI_VERSION}")
 
 install(TARGETS 2geom
     EXPORT 2geom_targets
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME
+      DESTINATION ${CMAKE_INSTALL_BINDIR}
+      COMPONENT "lib2geom${2GEOM_VERSION}"
+    LIBRARY
+      DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      COMPONENT "lib2geom${2GEOM_VERSION}"
+      NAMELINK_COMPONENT "lib2geom_dev"
+    ARCHIVE
+      DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      COMPONENT "lib2geom${2GEOM_VERSION}"
 )
 
 add_library(2Geom::2geom ALIAS 2geom)

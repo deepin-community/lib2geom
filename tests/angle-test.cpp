@@ -94,7 +94,7 @@ TEST(AngleIntervalTest, TimeAtAngle) {
     EXPECT_EQ(a.timeAtAngle(pi32), 1);
     EXPECT_EQ(a.extent(), M_PI/2);
     for (Coord t = -1; t <= 2; t += 0.125) {
-        Coord angle = lerp(t, M_PI, pi32);
+        Coord angle = Geom::lerp(t, M_PI, pi32);
         Coord ti = a.timeAtAngle(angle);
         EXPECT_EQ(unit.contains(ti), a.contains(angle));
         EXPECT_FLOAT_EQ(ti, t);
@@ -107,7 +107,7 @@ TEST(AngleIntervalTest, TimeAtAngle) {
     EXPECT_FLOAT_EQ(b.timeAtAngle(0), 1./3.);
     EXPECT_FLOAT_EQ(b.timeAtAngle((11./8)*M_PI), -1./12);
     for (Coord t = -0.125; t <= 1.125; t += 0.0625) {
-        Coord angle = lerp(t, pi32, 3*M_PI);
+        Coord angle = Geom::lerp(t, pi32, 3*M_PI);
         Coord ti = b.timeAtAngle(angle);
         EXPECT_EQ(unit.contains(ti), b.contains(angle));
         EXPECT_FLOAT_EQ(ti, t);
@@ -118,7 +118,7 @@ TEST(AngleIntervalTest, TimeAtAngle) {
     EXPECT_EQ(c.extent(), M_PI);
     EXPECT_FLOAT_EQ(c.timeAtAngle(M_PI/2), 0.5);
     for (Coord t = -0.25; t <= 1.25; t += 0.125) {
-        Coord angle = lerp(t, M_PI, 0);
+        Coord angle = Geom::lerp(t, M_PI, 0);
         Coord ti = c.timeAtAngle(angle);
         EXPECT_EQ(unit.contains(ti), c.contains(angle));
         EXPECT_FLOAT_EQ(ti, t);
@@ -129,7 +129,7 @@ TEST(AngleIntervalTest, TimeAtAngle) {
     EXPECT_EQ(d.extent(), pi32);
     EXPECT_FLOAT_EQ(d.timeAtAngle(-M_PI/4), 0.5);
     for (Coord t = -0.125; t <= 1.125; t += 0.0625) {
-        Coord angle = lerp(t, M_PI/2, -M_PI);
+        Coord angle = Geom::lerp(t, M_PI/2, -M_PI);
         Coord ti = d.timeAtAngle(angle);
         EXPECT_EQ(unit.contains(ti), d.contains(angle));
         EXPECT_FLOAT_EQ(ti, t);
@@ -139,7 +139,7 @@ TEST(AngleIntervalTest, TimeAtAngle) {
     EXPECT_EQ(e.extent(), 2*M_PI);
     EXPECT_FLOAT_EQ(e.timeAtAngle(0), 0.5);
     for (Coord t = 0; t < 1; t += 0.125) {
-        Coord angle = lerp(t, M_PI, 3*M_PI);
+        Coord angle = Geom::lerp(t, M_PI, 3*M_PI);
         Coord ti = e.timeAtAngle(angle);
         EXPECT_EQ(unit.contains(ti), true);
         EXPECT_EQ(e.contains(angle), true);
@@ -150,7 +150,7 @@ TEST(AngleIntervalTest, TimeAtAngle) {
     EXPECT_EQ(f.extent(), 2*M_PI);
     EXPECT_FLOAT_EQ(e.timeAtAngle(0), 0.5);
     for (Coord t = 0; t < 1; t += 0.125) {
-        Coord angle = lerp(t, M_PI, -M_PI);
+        Coord angle = Geom::lerp(t, M_PI, -M_PI);
         Coord ti = f.timeAtAngle(angle);
         EXPECT_EQ(unit.contains(ti), true);
         EXPECT_EQ(f.contains(angle), true);
@@ -169,25 +169,25 @@ TEST(AngleIntervalTest, AngleAt) {
     EXPECT_EQ(a.angleAt(1), pi32);
     EXPECT_EQ(a.extent(), M_PI/2);
     for (Coord t = -1; t <= 2; t += 0.125) {
-        EXPECT_FLOAT_EQ(a.angleAt(t), Angle(lerp(t, M_PI, pi32)));
+        EXPECT_FLOAT_EQ(a.angleAt(t), Angle(Geom::lerp(t, M_PI, pi32)));
     }
 
     EXPECT_EQ(c.angleAt(0), M_PI);
     EXPECT_EQ(c.angleAt(1), 0.);
     EXPECT_EQ(c.extent(), M_PI);
     for (Coord t = -0.25; t <= 1.25; t += 0.0625) {
-        EXPECT_FLOAT_EQ(c.angleAt(t), Angle(lerp(t, M_PI, 0)));
+        EXPECT_FLOAT_EQ(c.angleAt(t), Angle(Geom::lerp(t, M_PI, 0)));
     }
 
     EXPECT_EQ(f1.angleAt(0), 0.);
     EXPECT_EQ(f1.angleAt(1), 0.);
     for (Coord t = 0; t < 1; t += 0.125) {
-        EXPECT_FLOAT_EQ(f1.angleAt(t), Angle(lerp(t, 0, 2*M_PI)));
+        EXPECT_FLOAT_EQ(f1.angleAt(t), Angle(Geom::lerp(t, 0, 2*M_PI)));
     }
     EXPECT_EQ(f2.angleAt(0), M_PI);
     EXPECT_EQ(f2.angleAt(1), M_PI);
     for (Coord t = 0; t < 1; t += 0.125) {
-        EXPECT_FLOAT_EQ(f2.angleAt(t), Angle(lerp(t, M_PI, -M_PI)));
+        EXPECT_FLOAT_EQ(f2.angleAt(t), Angle(Geom::lerp(t, M_PI, -M_PI)));
     }
 }
 
@@ -206,4 +206,10 @@ TEST(AngleIntervalTest, Extent) {
     EXPECT_EQ(c.sweepAngle(), -M_PI);
     EXPECT_EQ(d.extent(), pi32);
     EXPECT_EQ(d.sweepAngle(), -pi32);
+}
+
+TEST(DegRadConversion, PreservesPI180)
+{
+    EXPECT_EQ(deg_from_rad(M_PI), 180);
+    EXPECT_EQ(rad_from_deg(180), M_PI);
 }

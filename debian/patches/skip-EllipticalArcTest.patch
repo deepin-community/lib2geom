@@ -1,0 +1,28 @@
+Description: disable failing tests
+ Upstread said that this test is giving out false-positives where it passes
+Bug: https://gitlab.com/inkscape/lib2geom/-/issues/63#note_1526186398
+Author: Mattia Rizzolo <mattia@debian.org>
+Forwarded: not-needed
+Last-Update: 2023-09-09
+
+--- a/tests/elliptical-arc-test.cpp
++++ b/tests/elliptical-arc-test.cpp
+@@ -178,6 +178,10 @@
+     }
+ }
+ 
++
++/*
++ * tests disabled as per:
++ * https://gitlab.com/inkscape/lib2geom/-/issues/63#note_1526186398
+ TEST(EllipticalArcTest, ArcIntersection) {
+     std::vector<CurveIntersection> r1, r2;
+ 
+@@ -226,6 +230,7 @@
+     EXPECT_DOUBLE_EQ(left_pt.first, 1.0); // Expect (-1, 0) reached at the end of upper
+     EXPECT_DOUBLE_EQ(left_pt.second, 0.0); // Expect (-1, 0) passed at the start of lower
+ }
++*/
+ 
+ TEST(EllipticalArcTest, BezierIntersection) {
+     std::vector<CurveIntersection> r1, r2;

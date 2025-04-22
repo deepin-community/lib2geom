@@ -617,9 +617,9 @@ class SketchFitterToy: public Toy {
             }
         }
         Piecewise<SBasis> k = interpolate( lengths, curvatures , 1);
-        Piecewise<SBasis> alpha = integral(k);
+        Piecewise<SBasis> alpha = Geom::integral(k);
         Piecewise<D2<SBasis> > v = sectionize(tan2(alpha));
-        stroke = integral(v) + mouses[0];
+        stroke = Geom::integral(v) + mouses[0];
 
         Point sp = stroke.lastValue()-stroke.firstValue();
         Point mp = mouses.back()-mouses.front();

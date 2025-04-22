@@ -137,7 +137,7 @@ class InverseTester: public Toy {
           cairo_set_source_rgba (cr, 0., 0.8, 0., 1);
           plot(cr,h,300);
           *notify<<g.size()<<" segments.";
-      } catch(NotInvertible) {
+      } catch (NotInvertible const &) {
           *notify << "function not invertible!" << std::endl;
       }
 

@@ -4,7 +4,7 @@
  *//*
  * Authors:
  *   Krzysztof Kosiński <tweenk.pl@gmail.com>
- * 
+ *
  * Copyright 2015 Authors
  *
  * This library is free software; you can redistribute it and/or
@@ -42,7 +42,7 @@
 #include "testing.h"
 
 #ifndef M_SQRT2
-#  define M_SQRT2 1.41421356237309504880 
+#  define M_SQRT2 1.41421356237309504880
 #endif
 
 using namespace Geom;
@@ -79,7 +79,7 @@ TEST(EllipseTest, Arcs) {
 
     // exactly half arc
     std::unique_ptr<EllipticalArc> arc3(e.arc(Point(5,0), Point(0,10), Point(5,20)));
-    
+
     EXPECT_EQ(arc3->boundsExact(), Rect::from_xywh(0,0,5,20));
     EXPECT_EQ(arc3->largeArc(), false);
     EXPECT_EQ(arc3->sweep(), false);
@@ -167,6 +167,37 @@ TEST(EllipseTest, LineIntersection) {
     EXPECT_NEAR(xs[1].point()[Y], 8./5, 1e-15);
 
     EXPECT_intersections_valid(e, l, xs, 1e-15);
+
+    // Test with a degenerate ellipse
+    auto degen = Ellipse({0, 0}, {3, 2}, 0);
+    degen *= Scale(1.0, 0.0); // Squash to the X-axis interval [-3, 3].
+
+    g_random_set_seed(0xCAFECAFE);
+    // Intersect with a line
+    for (size_t _ = 0; _ < 10'000; _++) {
+        auto line = Line(Point(g_random_double_range(-3.0, 3.0), g_random_double_range(-3.0, -1.0)),
+                         Point(g_random_double_range(-3.0, 3.0), g_random_double_range(1.0, 3.0)));
+        auto xings = degen.intersect(line);
+        EXPECT_EQ(xings.size(), 2u);
+        EXPECT_intersections_valid(degen, line, xings, 1e-14);
+    }
+    // Intersect with another, non-degenerate ellipse
+    for (size_t _ = 0; _ < 10'000; _++) {
+        auto other = Ellipse(Point(g_random_double_range(-1.0, 1.0), g_random_double_range(-1.0, 1.0)),
+                             Point(g_random_double_range(1.0, 2.0), g_random_double_range(1.0, 3.0)), 0);
+        auto xings = degen.intersect(other);
+        EXPECT_intersections_valid(degen, other, xings, 1e-14);
+    }
+    // Intersect with another ellipse which is also degenerate
+    for (size_t _ = 0; _ < 10'000; _++) {
+        auto other = Ellipse({0, 0}, {1, 1}, 0); // Unit circle
+        other *= Scale(0.0, g_random_double_range(0.5, 4.0)); // Squash to Y axis
+        other *= Rotate(g_random_double_range(-1.5, 1.5)); // Rotate a little (still passes through the origin)
+        other *= Translate(g_random_double_range(-2.9, 2.9), 0.0);
+        auto xings = degen.intersect(other);
+        EXPECT_EQ(xings.size(), 4u);
+        EXPECT_intersections_valid(degen, other, xings, 1e-14);
+    }
 }
 
 TEST(EllipseTest, EllipseIntersection) {
@@ -178,7 +209,7 @@ TEST(EllipseTest, EllipseIntersection) {
     e2.set(Point(250, 300), Point(230, 90), 1.321);
     xs = e1.intersect(e2);
     EXPECT_EQ(xs.size(), 4ul);
-    EXPECT_intersections_valid(e1, e2, xs, 1e-10);
+    EXPECT_intersections_valid(e1, e2, xs, 4e-10);
 
     e1.set(Point(0, 0), Point(1, 1), 0);
     e2.set(Point(0, 1), Point(1, 1), 0);
@@ -191,6 +222,57 @@ TEST(EllipseTest, EllipseIntersection) {
     xs = e1.intersect(e2);
     EXPECT_EQ(xs.size(), 2ul);
     EXPECT_intersections_valid(e1, e2, xs, 1e-10);
+
+    // === Test detection of external tangency between ellipses ===
+    // Perpendicular major axes
+    e1.set({0, 0}, {5, 3}, 0); // rightmost point (5, 0)
+    e2.set({6, 0}, {1, 2}, 0); // leftmost point (5, 0)
+    xs = e1.intersect(e2);
+    ASSERT_GT(xs.size(), 0);
+    EXPECT_intersections_valid(e1, e2, xs, 1e-10);
+    EXPECT_TRUE(are_near(xs[0].point(), Point(5, 0)));
+
+    // Collinear major axes
+    e1.set({30, 0}, {9, 1}, 0); // leftmost point (21, 0)
+    e2.set({18, 0}, {3, 2}, 0); // rightmost point (21, 0)
+    xs = e1.intersect(e2);
+    ASSERT_GT(xs.size(), 0);
+    EXPECT_intersections_valid(e1, e2, xs, 1e-10);
+    EXPECT_TRUE(are_near(xs[0].point(), Point(21, 0)));
+
+    // Circles not aligned to an axis (Pythagorean triple: 3^2 + 4^2 == 5^2)
+    e1.set({0, 0}, {3, 3}, 0); // radius 3
+    e2.set({3, 4}, {2, 2}, 0); // radius 2
+    // We know 2 + 3 == 5 == distance((0, 0), (3, 4)) so there's an external tangency
+    // between these circles, at a point at distance 3 from the origin, on the line x = 0.75 y.
+    xs = e1.intersect(e2);
+    ASSERT_GT(xs.size(), 0);
+    EXPECT_intersections_valid(e1, e2, xs, 1e-6);
+
+    // === Test the detection of internal tangency between ellipses ===
+    // Perpendicular major axes
+    e1.set({0, 0}, {8, 17}, 0); // rightmost point (8, 0)
+    e2.set({6, 0}, {2, 1}, 0); // rightmost point (8, 0)
+    xs = e1.intersect(e2);
+    ASSERT_GT(xs.size(), 0);
+    EXPECT_intersections_valid(e1, e2, xs, 1e-10);
+    EXPECT_TRUE(are_near(xs[0].point(), Point(8, 0)));
+
+    // Collinear major axes
+    e1.set({30, 0}, {9, 5}, 0); // rightmost point (39, 0)
+    e2.set({36, 0}, {3, 1}, 0); // rightmost point (39, 0)
+    xs = e1.intersect(e2);
+    ASSERT_GT(xs.size(), 0);
+    EXPECT_intersections_valid(e1, e2, xs, 1e-6);
+    EXPECT_TRUE(are_near(xs[0].point(), Point(39, 0)));
+
+    // Circles not aligned to an axis (Pythagorean triple: 3^2 + 4^2 == 5^2)
+    e1.set({4, 3}, {5, 5}, 0); // Passes through (0, 0), center on the line y = 0.75 x
+    e2.set({8, 6}, {10, 10}, 0); // Also passes through (0, 0), center on the same line.
+    xs = e1.intersect(e2);
+    ASSERT_GT(xs.size(), 0);
+    EXPECT_intersections_valid(e1, e2, xs, 1e-6);
+    EXPECT_TRUE(are_near(xs[0].point(), Point(0, 0)));
 }
 
 TEST(EllipseTest, BezierIntersection) {
@@ -273,7 +355,9 @@ TEST(EllipseTest, UnitTangentAt) {
     EXPECT_near(b.unitTangentAt(3*M_PI/2), Point(M_SQRT2/2, M_SQRT2/2), 1e-12);
 }
 
-TEST(EllipseTest, BoundsExact) {
+TEST(EllipseTest, Bounds)
+{
+    // Create example ellipses
     std::vector<Ellipse> es;
     es.emplace_back(Point(-15,25), Point(10,15), Angle::from_degrees(45));
     es.emplace_back(Point(-10,33), Point(40,20), M_PI);
@@ -285,27 +369,42 @@ TEST(EllipseTest, BoundsExact) {
 
     for (auto & e : es) {
         Rect r = e.boundsExact();
+        Rect f = e.boundsFast();
         for (unsigned j = 0; j < 10000; ++j) {
             Coord t = g_random_double_range(-M_PI, M_PI);
-            EXPECT_TRUE(r.contains(e.pointAt(t)));
+            auto const p = e.pointAt(t);
+            EXPECT_TRUE(r.contains(p));
+            EXPECT_TRUE(f.contains(p));
         }
     }
 
     Ellipse e(Point(0,0), Point(10, 10), M_PI);
     Rect bounds = e.boundsExact();
+    Rect coarse = e.boundsFast();
     EXPECT_EQ(bounds, Rect(Point(-10,-10), Point(10,10)));
     EXPECT_TRUE(bounds.contains(e.pointAt(0)));
     EXPECT_TRUE(bounds.contains(e.pointAt(M_PI/2)));
     EXPECT_TRUE(bounds.contains(e.pointAt(M_PI)));
     EXPECT_TRUE(bounds.contains(e.pointAt(3*M_PI/2)));
     EXPECT_TRUE(bounds.contains(e.pointAt(2*M_PI)));
+    EXPECT_TRUE(coarse.contains(e.pointAt(0)));
+    EXPECT_TRUE(coarse.contains(e.pointAt(M_PI/2)));
+    EXPECT_TRUE(coarse.contains(e.pointAt(M_PI)));
+    EXPECT_TRUE(coarse.contains(e.pointAt(3*M_PI/2)));
+    EXPECT_TRUE(coarse.contains(e.pointAt(2*M_PI)));
 
     e = Ellipse(Point(0,0), Point(10, 10), M_PI/2);
     bounds = e.boundsExact();
+    coarse = e.boundsFast();
     EXPECT_EQ(bounds, Rect(Point(-10,-10), Point(10,10)));
     EXPECT_TRUE(bounds.contains(e.pointAt(0)));
     EXPECT_TRUE(bounds.contains(e.pointAt(M_PI/2)));
     EXPECT_TRUE(bounds.contains(e.pointAt(M_PI)));
     EXPECT_TRUE(bounds.contains(e.pointAt(3*M_PI/2)));
     EXPECT_TRUE(bounds.contains(e.pointAt(2*M_PI)));
+    EXPECT_TRUE(coarse.contains(e.pointAt(0)));
+    EXPECT_TRUE(coarse.contains(e.pointAt(M_PI/2)));
+    EXPECT_TRUE(coarse.contains(e.pointAt(M_PI)));
+    EXPECT_TRUE(coarse.contains(e.pointAt(3*M_PI/2)));
+    EXPECT_TRUE(coarse.contains(e.pointAt(2*M_PI)));
 }

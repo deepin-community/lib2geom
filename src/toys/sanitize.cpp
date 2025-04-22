@@ -28,7 +28,7 @@ struct Edge {
     bool cw;
     Edge() { }
     Edge(EndPoint f, EndPoint t, int i, bool c) : from(f), to(t), ix(i), cw(c) { }
-    bool operator==(Edge const &other) { return from.time == other.from.time && to.time == other.to.time; }
+    bool operator==(Edge const &other) const { return from.time == other.from.time && to.time == other.to.time; }
 };
 
 typedef std::vector<Edge> Edges;

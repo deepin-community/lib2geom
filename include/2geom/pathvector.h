@@ -222,6 +222,9 @@ public:
     Point finalPoint() const {
         return _data.back().finalPoint();
     }
+    /** @brief Get all intersections of the path-vector with itself. This includes both
+     *  self-intersections of constituent paths and intersections between different paths. */
+    std::vector<PathVectorIntersection> intersectSelf(Coord precision = EPSILON) const;
     Path &pathAt(Coord t, Coord *rest = NULL);
     Path const &pathAt(Coord t, Coord *rest = NULL) const;
     Curve const &curveAt(Coord t, Coord *rest = NULL) const;

@@ -35,14 +35,18 @@
 #ifndef LIB2GEOM_SEEN_PATH_H
 #define LIB2GEOM_SEEN_PATH_H
 
+#include <cstddef>
 #include <iterator>
 #include <algorithm>
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <utility>
+#include <vector>
+
 #include <boost/operators.hpp>
 #include <boost/ptr_container/ptr_vector.hpp>
+
 #include <2geom/intersection.h>
 #include <2geom/curve.h>
 #include <2geom/bezier-curve.h>
@@ -106,6 +110,10 @@ class BaseIterator
         index -= d;
         return *this;
     }
+    std::ptrdiff_t operator-(Self const &other) const {
+        assert(path == other.path);
+        return (std::ptrdiff_t)index - (std::ptrdiff_t)other.index;
+    }
 
   private:
     P *path;
@@ -124,7 +132,7 @@ class BaseIterator
  * in long paths, either use this class and related methods instead of the standard methods
  * pointAt(), nearestTime() and so on, or use curveAt() to first obtain the curve, then
  * call the method again to obtain a high precision result.
- * 
+ *
  * @ingroup Paths */
 struct PathTime
     : boost::totally_ordered<PathTime>
@@ -275,6 +283,26 @@ struct ShapeTraits<Path> {
     typedef PathInterval IntervalType;
     typedef Path AffineClosureType;
     typedef PathIntersection IntersectionType;
+};
+
+/** @brief Stores information about the extremum points on a path, with respect
+ *         to one of the coordinate axes.
+ *  @relates Path::extrema()
+ */
+struct PathExtrema {
+    /** Points with the minimum and maximum value of a coordinate. */
+    Point min_point, max_point;
+
+    /** Directions in which the OTHER coordinates change at the extremum points.
+     *
+     * - equals +1.0 if the other coordinate increases,
+     * - equals  0.0 if the other coordinate is constant (e.g., for an axis-aligned segment),
+     * - equals -1.0 if the other coordinate decreases.
+     */
+    float glance_direction_at_min, glance_direction_at_max;
+
+    /** Path times corresponding to minimum and maximum points. */
+    PathTime min_time, max_time;
 };
 
 /** @brief Sequence of contiguous curves, aka spline.
@@ -536,7 +564,7 @@ public:
      * Note that this method has reduced precision with respect to calling pointAt()
      * directly on the curve. If you want high precision results, use the version
      * that takes a PathTime parameter.
-     * 
+     *
      * Allowed time values range from zero to the number of curves; you can retrieve
      * the allowed range of values with timeRange(). */
     Point pointAt(Coord t) const;
@@ -553,14 +581,24 @@ public:
 
     Point operator()(Coord t) const { return pointAt(t); }
 
+    /** @brief Find the extrema of the specified coordinate.
+     *
+     * Returns a PathExtrema struct describing "witness" points on the path
+     * where the specified coordinate attains its minimum and maximum values.
+     */
+    PathExtrema extrema(Dim2 d) const;
+
     /// Compute intersections with axis-aligned line.
     std::vector<PathTime> roots(Coord v, Dim2 d) const;
 
     /// Compute intersections with another path.
     std::vector<PathIntersection> intersect(Path const &other, Coord precision = EPSILON) const;
 
+    /// Compute intersections of the path with itself.
+    std::vector<PathIntersection> intersectSelf(Coord precision = EPSILON) const;
+
     /** @brief Determine the winding number at the specified point.
-     * 
+     *
      * The winding number is the number of full turns made by a ray that connects the passed
      * point and the path's value (i.e. the result of the pointAt() method) as the time increases
      * from 0 to the maximum valid value. Positive numbers indicate turns in the direction
@@ -643,7 +681,7 @@ public:
     Path reversed() const;
 
     void insert(iterator pos, Curve const &curve);
-    
+
     template <typename Iter>
     void insert(iterator pos, Iter first, Iter last) {
         _unshare();
@@ -670,6 +708,29 @@ public:
      * If the path is closed, this is always the same as the initial point. */
     Point finalPoint() const { return (*_closing_seg)[_closed ? 1 : 0]; }
 
+    /** @brief Get the unit tangent vector at the start of the path,
+     * or the zero vector if undefined. */
+    Point initialUnitTangent() const {
+        for (auto const &curve : *this) {
+            if (!curve.isDegenerate()) {
+                return curve.unitTangentAt(0.0);
+            }
+        }
+        return Point();
+    }
+
+    /** @brief Get the unit tangent vector at the end of the path,
+     * or the zero vector if undefined. */
+    Point finalUnitTangent() const {
+        for (auto it = end(); it != begin();) {
+            --it;
+            if (!it->isDegenerate()) {
+                return it->unitTangentAt(1.0);
+            }
+        }
+        return Point();
+    }
+
     void setInitial(Point const &p) {
         _unshare();
         _closed = false;
@@ -679,7 +740,7 @@ public:
     void setFinal(Point const &p) {
         _unshare();
         _closed = false;
-        _data->curves[size_open() - 1].setFinal(p);
+        _data->curves[size_open() ? size_open() - 1 : 0].setFinal(p);
         _closing_seg->setInitial(p);
     }
 
@@ -752,6 +813,10 @@ public:
     /// Append a stitching segment ending at the specified point.
     void stitchTo(Point const &p);
 
+    /** @brief Return a copy of the path without degenerate curves, except possibly for a
+      * degenerate closing segment. */
+    Path withoutDegenerateCurves() const;
+
     /** @brief Verify the continuity invariant.
      * If the path is not contiguous, this will throw a CountinuityError. */
     void checkContinuity() const;
@@ -778,7 +843,7 @@ private:
     void _unshare() {
         // Called before every mutation.
         // Ensure we have our own copy of curve data and reset cached values
-        if (!_data.unique()) {
+        if (_data.use_count() != 1) {
             _data.reset(new PathData(*_data));
             _closing_seg = static_cast<ClosingSegment*>(&_data->curves.back());
         }
@@ -806,6 +871,32 @@ inline Coord nearest_time(Point const &p, Path const &c) {
 }
 
 bool are_near(Path const &a, Path const &b, Coord precision = EPSILON);
+
+/**
+ * @brief Find the first point where two paths diverge away from one another.
+ *
+ * If the two paths have a common starting point, the algorithm follows them for as long as the
+ * images of the paths coincide and finds the first point where they stop coinciding. Note that
+ * only the images of paths in the plane are compared, and not their parametrizations, so this
+ * is not a functional (parametric) coincidence. If you want to test parametric coincidence, use
+ * bool are_near(Path const&, Path const&, Coord) instead.
+ *
+ * The function returns the point where the traces of the two paths finally diverge up to the
+ * specified precision. If the traces (images) of the paths are nearly identical until the end,
+ * the returned point is their (almost) common endpoint. If however the image of one of the paths
+ * is completely contained in the image of the other path, the returned point is the endpoint of
+ * the shorter path.
+ *
+ * If the paths have different starting points, then the returned intersection has the special
+ * time values of -1.0 on both paths and the returned intersection point is the midpoint of the
+ * line segment connecting the two starting points.
+ *
+ * @param first     The first path to follow; corresponds to .first in the return value.
+ * @param second    The second path to follow; corresponds to .second in the return value.
+ * @param precision How close the paths' images need to be in order to be considered as overlapping.
+ * @return A path intersection specifying the point and path times where the two paths part ways.
+ */
+PathIntersection parting_point(Path const &first, Path const &second, Coord precision = EPSILON);
 
 std::ostream &operator<<(std::ostream &out, Path const &path);
 

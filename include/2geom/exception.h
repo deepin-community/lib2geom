@@ -116,6 +116,18 @@ public:
 };
 #define THROW_INFINITESOLUTIONS(i) throw(InfiniteSolutions(__FILE__, __LINE__))
 
+class InfinitelyManySolutions : public RangeError {
+private:
+    char const *const _message;
+public:
+    InfinitelyManySolutions(const char *file, const int line, char const *message)
+        : RangeError("There are infinitely many solutions", file, line)
+        , _message{message}
+    {}
+    char const *what() const noexcept override { return _message; }
+};
+#define THROW_INFINITELY_MANY_SOLUTIONS(msg) throw(InfinitelyManySolutions(__FILE__, __LINE__, msg))
+
 class ContinuityError : public RangeError {
 public:
     ContinuityError(const char *file, const int line)

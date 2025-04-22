@@ -31,7 +31,9 @@
 #ifndef LIB2GEOM_SEEN_INT_POINT_H
 #define LIB2GEOM_SEEN_INT_POINT_H
 
-#include <stdexcept>
+#include <cassert>
+#include <tuple>
+#include <boost/functional/hash.hpp>
 #include <boost/operators.hpp>
 #include <2geom/coord.h>
 
@@ -49,52 +51,89 @@ namespace Geom {
 class IntPoint
     : boost::additive< IntPoint
     , boost::totally_ordered< IntPoint
-    > >
+    , boost::multiplicative< IntPoint, IntCoord
+    , boost::multiplicative< IntPoint
+    >>>> // base class chaining, see documentation for Boost.Operator
 {
-    IntCoord _pt[2];
+    IntCoord _pt[2] = { 0, 0 };
 public:
-    /// @name Creating integer points
+    /// @name Create integer points
     /// @{
-    IntPoint() { }
-    IntPoint(IntCoord x, IntCoord y) {
-        _pt[X] = x;
-        _pt[Y] = y;
-    }
+    /** Construct a point at the origin. */
+    constexpr IntPoint() = default;
+    /** Construct a point from its coordinates. */
+    constexpr IntPoint(IntCoord x, IntCoord y)
+        : _pt{ x, y }
+    {}
     /// @}
 
     /// @name Access the coordinates of a point
     /// @{
-    IntCoord operator[](unsigned i) const {
-        if ( i > Y ) throw std::out_of_range("index out of range");
-        return _pt[i];
-    }
-    IntCoord &operator[](unsigned i) {
-        if ( i > Y ) throw std::out_of_range("index out of range");
-        return _pt[i];
-    }
-    IntCoord operator[](Dim2 d) const { return _pt[d]; }
-    IntCoord &operator[](Dim2 d) { return _pt[d]; }
+    IntCoord operator[](unsigned i) const { assert(i < 2); return _pt[i]; }
+    IntCoord &operator[](unsigned i) { assert(i < 2); return _pt[i]; }
+    constexpr IntCoord operator[](Dim2 d) const { return _pt[d]; }
+    constexpr IntCoord &operator[](Dim2 d) { return _pt[d]; }
 
-    IntCoord x() const noexcept { return _pt[X]; }
-    IntCoord &x() noexcept { return _pt[X]; }
-    IntCoord y() const noexcept { return _pt[Y]; }
-    IntCoord &y() noexcept { return _pt[Y]; }
+    constexpr IntCoord x() const noexcept { return _pt[X]; }
+    constexpr IntCoord &x() noexcept { return _pt[X]; }
+    constexpr IntCoord y() const noexcept { return _pt[Y]; }
+    constexpr IntCoord &y() noexcept { return _pt[Y]; }
+
+    // Structured binding support
+    template <size_t I> constexpr IntCoord get() const { static_assert(I < 2); return _pt[I]; }
+    template <size_t I> constexpr IntCoord &get() { static_assert(I < 2); return _pt[I]; }
+    /// @}
+
+    /// @name Vector-like operations
+    /// @{
+    constexpr IntCoord lengthSq() const { return _pt[X] * _pt[X] + _pt[Y] * _pt[Y]; }
+    /** @brief Return a point like this point but rotated -90 degrees.
+     * If the y axis grows downwards and the x axis grows to the
+     * right, then this is 90 degrees counter-clockwise. */
+    constexpr IntPoint ccw() const {
+        return IntPoint(_pt[Y], -_pt[X]);
+    }
+    /** @brief Return a point like this point but rotated +90 degrees.
+     * If the y axis grows downwards and the x axis grows to the
+     * right, then this is 90 degrees clockwise. */
+    constexpr IntPoint cw() const {
+        return IntPoint(-_pt[Y], _pt[X]);
+    }
     /// @}
 
     /// @name Vector-like arithmetic operations
     /// @{
-    IntPoint operator-() const {
-        IntPoint ret(-_pt[X], -_pt[Y]);
-        return ret;
+    constexpr IntPoint operator-() const {
+        return IntPoint(-_pt[X], -_pt[Y]);
     }
-    IntPoint &operator+=(IntPoint const &o) {
+    constexpr IntPoint &operator+=(IntPoint const &o) {
         _pt[X] += o._pt[X];
         _pt[Y] += o._pt[Y];
         return *this;
     }
-    IntPoint &operator-=(IntPoint const &o) {
+    constexpr IntPoint &operator-=(IntPoint const &o) {
         _pt[X] -= o._pt[X];
         _pt[Y] -= o._pt[Y];
+        return *this;
+    }
+    constexpr IntPoint &operator*=(IntPoint const &o) {
+        _pt[X] *= o._pt[X];
+        _pt[Y] *= o._pt[Y];
+        return *this;
+    }
+    constexpr IntPoint &operator*=(IntCoord o) {
+        _pt[X] *= o;
+        _pt[Y] *= o;
+        return *this;
+    }
+    constexpr IntPoint &operator/=(IntPoint const &o) {
+        _pt[X] /= o._pt[X];
+        _pt[Y] /= o._pt[Y];
+        return *this;
+    }
+    constexpr IntPoint &operator/=(IntCoord o) {
+        _pt[X] /= o;
+        _pt[Y] /= o;
         return *this;
     }
     /// @}
@@ -102,16 +141,15 @@ public:
     /// @name Various utilities
     /// @{
     /** @brief Equality operator. */
-    bool operator==(IntPoint const &in_pnt) const {
-        return ((_pt[X] == in_pnt[X]) && (_pt[Y] == in_pnt[Y]));
+    constexpr bool operator==(IntPoint const &p) const {
+        return _pt[X] == p[X] && _pt[Y] == p[Y];
     }
     /** @brief Lexicographical ordering for points.
      * Y coordinate is regarded as more significant. When sorting according to this
      * ordering, the points will be sorted according to the Y coordinate, and within
      * points with the same Y coordinate according to the X coordinate. */
-    bool operator<(IntPoint const &p) const {
-        return ( ( _pt[Y] < p[Y] ) ||
-             (( _pt[Y] == p[Y] ) && ( _pt[X] < p[X] )));
+    constexpr bool operator<(IntPoint const &p) const {
+        return _pt[Y] < p[Y] || (_pt[Y] == p[Y] && _pt[X] < p[X]);
     }
     /// @}
     
@@ -164,9 +202,24 @@ inline bool IntPoint::LexGreaterRt::operator()(IntPoint const &a, IntPoint const
     return dim ? IntPoint::LexGreater<Y>()(a, b) : IntPoint::LexGreater<X>()(a, b);
 }
 
-}  // namespace Geom
+} // namespace Geom
 
-#endif // !SEEN_GEOM_INT_POINT_H
+// Structured binding support
+template <> struct std::tuple_size<Geom::IntPoint> : std::integral_constant<size_t, 2> {};
+template <size_t I> struct std::tuple_element<I, Geom::IntPoint> { using type = Geom::IntCoord; };
+
+// Hash support
+template <> struct std::hash<Geom::IntPoint>
+{
+    size_t operator()(Geom::IntPoint const &p) const noexcept {
+        size_t hash = 0;
+        boost::hash_combine(hash, p.x());
+        boost::hash_combine(hash, p.y());
+        return hash;
+    }
+};
+
+#endif // LIB2GEOM_SEEN_INT_POINT_H
 
 /*
   Local Variables:

@@ -45,9 +45,6 @@ enum Errors : ErrorCode {
     GEOM_ERR_INTERSECGRAPH,
 };
 
-// proper logical xor
-inline bool logical_xor (bool a, bool b) { return (a || b) && !(a && b); }
-
 void binomial_coefficients(std::vector<size_t>& bc, std::size_t n);
 
 struct EmptyClass {};

@@ -133,9 +133,9 @@ class Squiggles: public Toy {
         //Compute new curve
 
         Piecewise<SBasis> curvature = interpolate( times, curvatures , 1);
-        Piecewise<SBasis> alpha = integral(curvature);
+        Piecewise<SBasis> alpha = Geom::integral(curvature);
         Piecewise<D2<SBasis> > v = sectionize(tan2(alpha));
-        curve = integral(v)+Point(100,100);	
+        curve = Geom::integral(v) + Point(100, 100);
 
         //transform to keep current point in place
         double time = times[current_ctl_pt];

@@ -4,7 +4,7 @@
  *   MenTaLguY <mental@rydia.net>
  *   Marco Cecchetti <mrcekets at gmail.com>
  *   Krzysztof Kosiński <tweenk.pl@gmail.com>
- * 
+ *
  * Copyright 2007-2009 Authors
  *
  * This library is free software; you can redistribute it and/or
@@ -35,8 +35,9 @@
 #include <2geom/path-sink.h>
 #include <2geom/basic-intersection.h>
 #include <2geom/nearest-time.h>
+#include <2geom/polynomial.h>
 
-namespace Geom 
+namespace Geom
 {
 
 /**
@@ -101,8 +102,8 @@ namespace Geom
  * @brief Bezier curve with compile-time specified order.
  *
  * @tparam degree unsigned value indicating the order of the Bezier curve
- * 
- * @relates BezierCurve 
+ *
+ * @relates BezierCurve
  * @ingroup Curves
  */
 
@@ -124,6 +125,29 @@ bool BezierCurve::isDegenerate() const
         }
     }
     return true;
+}
+
+/** Return false if there are at least 3 distinct control points, true otherwise. */
+bool BezierCurve::isLineSegment() const
+{
+    auto const last_idx = size() - 1;
+    if (last_idx == 1) {
+        return true;
+    }
+    auto const start = controlPoint(0);
+    auto const end = controlPoint(last_idx);
+    for (unsigned i = 1; i < last_idx; ++i) {
+        auto const pi = controlPoint(i);
+        if (pi != start && pi != end) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void BezierCurve::expandToTransformed(Rect &bbox, Affine const &transform) const
+{
+    bbox |= bounds_exact(inner * transform);
 }
 
 Coord BezierCurve::length(Coord tolerance) const
@@ -198,22 +222,54 @@ bool BezierCurve::isNear(Curve const &c, Coord precision) const
         }
         return true;
     } else {
-        // TODO: comparison after degree elevation
-        return false;
+        // Must equalize the degrees before comparing
+        BezierCurve elevated_this, elevated_other;
+        for (size_t dim = 0; dim < 2; dim++) {
+            unsigned const our_degree = inner[dim].degree();
+            unsigned const other_degree = other->inner[dim].degree();
+
+            if (our_degree < other_degree) {
+                // Elevate our degree
+                elevated_this.inner[dim] = inner[dim].elevate_to_degree(other_degree);
+                elevated_other.inner[dim] = other->inner[dim];
+            } else if (our_degree > other_degree) {
+                // Elevate the other's degree
+                elevated_this.inner[dim] = inner[dim];
+                elevated_other.inner[dim] = other->inner[dim].elevate_to_degree(our_degree);
+            } else {
+                // Equal degrees: just copy
+                elevated_this.inner[dim] = inner[dim];
+                elevated_other.inner[dim] = other->inner[dim];
+            }
+        }
+        assert(elevated_other.size() == elevated_this.size());
+        return elevated_this.isNear(elevated_other, precision);
     }
 }
 
-bool BezierCurve::operator==(Curve const &c) const
+Curve *BezierCurve::portion(Coord f, Coord t) const
+{
+    if (f == 0.0 && t == 1.0) {
+        return duplicate();
+    }
+    if (f == 1.0 && t == 0.0) {
+        return reverse();
+    }
+    return new BezierCurve(Geom::portion(inner, f, t));
+}
+
+bool BezierCurve::_equalTo(Curve const &c) const
 {
     if (this == &c) return true;
-
-    BezierCurve const *other = dynamic_cast<BezierCurve const *>(&c);
+    auto other = dynamic_cast<BezierCurve const *>(&c);
     if (!other) return false;
+
     if (size() != other->size()) return false;
 
     for (unsigned i = 0; i < size(); ++i) {
         if (controlPoint(i) != other->controlPoint(i)) return false;
     }
+
     return true;
 }
 
@@ -269,6 +325,45 @@ BezierCurve *BezierCurve::create(std::vector<Point> const &pts)
     }
 }
 
+/**
+ * Computes the times where the radius of curvature of the bezier curve equals the given radius. 
+*/
+std::vector<Coord> BezierCurve::timesWithRadiusOfCurvature(double radius) const
+{
+    /**
+     * The algorithm works as follows:
+     * Find the solutions of curvature of curve at t = curvatureValue
+     * This is equivalent to (dx*ddy-ddx*dy)/curvatureValue = (dx**2+dy**2)**(3/2)
+     * When the left side is positive, taking the square gives
+     * ((dx*ddy-ddx*dy)/curvatureValue)**2 - (dx**2+dy**2)**3 = 0
+     * This is a polyomial for BezierCurves and can be solved with root finding algos.
+    */
+
+    if (this->size() <= 2) {
+        return {};
+    }
+
+    std::vector<Coord> res;
+
+    auto const dx = Geom::derivative(inner[X]);
+    auto const dy = Geom::derivative(inner[Y]);
+    auto const ddx = Geom::derivative(dx);
+    auto const ddy = Geom::derivative(dy);
+    auto const c0 = (dx * ddy - ddx * dy) * radius;
+    auto const c1 = dx * dx + dy * dy;
+    auto const p = c0 * c0 - c1 * c1 * c1;
+    auto const candidates = p.roots();
+    // check which candidates have positive nominator
+    // as squaring also give negative (spurious) results
+    for (Coord const candidate : candidates) {
+        if (c0.valueAt(candidate) > 0) {
+            res.push_back(candidate);
+        }
+    }
+
+    return res;
+}
+
 // optimized specializations for LineSegment
 
 template <>
@@ -294,24 +389,196 @@ Coord BezierCurveN<1>::nearestTime(Point const& p, Coord from, Coord to) const
     else return from + t*(to-from);
 }
 
+/* Specialized intersection routine for line segments.
+ *
+ * NOTE: if the segments overlap in part or in full, the function returns the start and end
+ * of the overlapping subsegment as intersections. This behavior is more useful than throwing
+ * Geom::InfinitelyManySolutions.
+ */
 template <>
 std::vector<CurveIntersection> BezierCurveN<1>::intersect(Curve const &other, Coord eps) const
 {
     std::vector<CurveIntersection> result;
 
     // only handle intersections with other LineSegments here
-    if (other.isLineSegment()) {
-        Line this_line(initialPoint(), finalPoint());
-        Line other_line(other.initialPoint(), other.finalPoint());
-        result = this_line.intersect(other_line);
-        filter_line_segment_intersections(result, true, true);
+    if (!other.isLineSegment()) {
+        // pass all other types to the other curve
+        result = other.intersect(*this, eps);
+        transpose_in_place(result);
         return result;
     }
 
-    // pass all other types to the other curve
-    result = other.intersect(*this, eps);
-    transpose_in_place(result);
+    Point const u = finalPoint() - initialPoint();
+    Point const v = other.initialPoint() - other.finalPoint();
+    if (u.isZero() || v.isZero()) {
+        return {};
+    }
+    Coord const uv = u.length() * v.length();
+    Coord const u_cross_v = cross(u, v);
+    bool const segments_are_parallel = std::abs(u_cross_v) < eps * uv;
+
+    if (segments_are_parallel) {
+        // We check if the segments lie on the same line.
+        Coord const distance_between_lines = std::abs(cross(u.normalized(),
+                                                            other.initialPoint() - initialPoint()));
+        if (distance_between_lines > eps) {
+            // Segments are parallel but aren't part of the same line => no intersections.
+            return {};
+        }
+        // The segments are on the same line, so they may overlap in part or in full.
+        // Look for the times on this segment's line at which the line passes through
+        // the initial and final points of the other segment.
+        Coord const ulen_inverse = 1.0 / u.length();
+        auto const time_of_passage = [&](Point const &point_on_line) -> Coord {
+            return dot(u.normalized(), point_on_line - initialPoint()) * ulen_inverse;
+        };
+        // Find the range of times on our segment where we travel through the other segment.
+        auto time_in_other = Interval(time_of_passage(other.initialPoint()),
+                                      time_of_passage(other.finalPoint()));
+        Coord const eps_utime = eps * ulen_inverse;
+        if (time_in_other.min() > 1 + eps_utime || time_in_other.max() < -eps_utime) {
+            return {};
+        }
+
+        // Create two intersections, one at each end of the overlap interval.
+        Coord last_time = infinity();
+        for (Coord t : {time_in_other.min(), time_in_other.max()}) {
+            t = std::clamp(t, 0.0, 1.0);
+            if (t == last_time) {
+                continue;
+            }
+            last_time = t;
+            auto const point = pointAt(t);
+            Coord const other_t = std::clamp(dot(v.normalized(), other.initialPoint() - point) / v.length(), 0.0, 1.0);
+            auto const other_pt = other.pointAt(other_t);
+            if (distance(point, other_pt) > eps) {
+                continue;
+            }
+            result.emplace_back(t, other_t, middle_point(point, other_pt));
+        }
+        return result;
+    } else {
+        // Segments are not collinear - there is 0 or 1 intersection.
+        // This is the typical case so it's important for it to be fast.
+        Point const w = other.initialPoint() - initialPoint();
+        Coord candidate_time_this = cross(w, v) / u_cross_v;
+
+        /// Filter out candidate times outside of the interval [0, 1] fuzzed so as to accommodate
+        /// for epsilon.
+        auto const is_outside_seg = [eps](Coord t, Coord len) -> bool {
+            Coord const arclen_coord = t * len;
+            return arclen_coord < -eps || arclen_coord > len + eps;
+        };
+
+        if (is_outside_seg(candidate_time_this, u.length())) {
+            return {};
+        }
+
+        Coord candidate_time_othr = cross(u, w) / u_cross_v;
+        if (is_outside_seg(candidate_time_othr, v.length())) {
+            return {};
+        }
+
+        // Even if there was some fuzz in the interval, we must now restrict to [0, 1] and verify
+        // that the intersection found is still within epsilon precision (the fuzz may have been too
+        // large, depending on the angle between the intervals).
+        candidate_time_this = std::clamp(candidate_time_this, 0.0, 1.0);
+        candidate_time_othr = std::clamp(candidate_time_othr, 0.0, 1.0);
+
+        auto const pt_this = pointAt(candidate_time_this);
+        auto const pt_othr = other.pointAt(candidate_time_othr);
+        if (distance(pt_this, pt_othr) > eps) {
+            return {};
+        }
+        return { CurveIntersection(candidate_time_this, candidate_time_othr, middle_point(pt_this, pt_othr)) };
+    }
+}
+
+/** @brief Find intersections of a low-degree Bézier curve with a line segment.
+ *
+ * Uses algebraic solutions to low-degree polynomial equations which may be faster
+ * and more precise than iterative methods.
+ *
+ * @tparam degree The degree of the Bézier curve; must be 2 or 3.
+ * @param curve A Bézier curve of the given degree.
+ * @param line A line (but really a segment).
+ * @return Intersections between the passed curve and the fundamental segment of the line
+ *         (the segment where the time parameter lies in the unit interval).
+ */
+template <unsigned degree>
+static std::vector<CurveIntersection> bezier_line_intersections(BezierCurveN<degree> const &curve, Line const &line)
+{
+    static_assert(degree == 2 || degree == 3, "bezier_line_intersections<degree>() error: degree must be 2 or 3.");
+
+    auto const length = distance(line.initialPoint(), line.finalPoint());
+    if (length == 0) {
+        return {};
+    }
+    std::vector<CurveIntersection> result;
+
+    // Find the isometry mapping the line to the x-axis, taking the initial point to the origin
+    // and the final point to (length, 0). Apply this transformation to the Bézier curve and
+    // extract the y-coordinate polynomial.
+    auto const transform = line.rotationToZero(Y);
+    Bezier const y = (curve.fragment() * transform)[Y];
+    std::vector<double> roots;
+
+    // Find roots of the polynomial y.
+    {
+        double const c2 = y[0] + y[2] - 2.0 * y[1];
+        double const c1 = y[1] - y[0];
+        double const c0 = y[0];
+
+        if constexpr (degree == 2) {
+            roots = solve_quadratic(c2, 2.0 * c1, c0);
+        } else if constexpr (degree == 3) {
+            double const c3 = y[3] - y[0] + 3.0 * (y[1] - y[2]);
+            roots = solve_cubic(c3, 3.0 * c2, 3.0 * c1 , c0);
+        }
+    }
+
+    // Filter the roots and assemble intersections.
+    for (double root : roots) {
+        if (root < 0.0 || root > 1.0) {
+            continue;
+        }
+        Coord x = (curve.pointAt(root) * transform)[X];
+        if (x < 0.0 || x > length) {
+            continue;
+        }
+        result.emplace_back(curve, line, root, x / length);
+    }
     return result;
+}
+
+/* Specialized intersection routine for quadratic Bézier curves. */
+template <>
+std::vector<CurveIntersection> BezierCurveN<2>::intersect(Curve const &other, Coord eps) const
+{
+    if (auto other_bezier = dynamic_cast<BezierCurve const *>(&other)) {
+        auto const other_degree = other_bezier->order();
+        if (other_degree == 1) {
+            // Use the exact method to intersect a quadratic Bézier with a line segment.
+            auto line = Line(other_bezier->initialPoint(), other_bezier->finalPoint());
+            return bezier_line_intersections<2>(*this, line);
+        }
+        // TODO: implement exact intersection of two quadratic Béziers using the method of resultants.
+    }
+    return BezierCurve::intersect(other, eps);
+}
+
+/* Specialized intersection routine for cubic Bézier curves. */
+template <>
+std::vector<CurveIntersection> BezierCurveN<3>::intersect(Curve const &other, Coord eps) const
+{
+    if (auto other_bezier = dynamic_cast<BezierCurve const *>(&other)) {
+        if (other_bezier->order() == 1) {
+            // Use the exact method to intersect a cubic Bézier with a line segment.
+            auto line = Line(other_bezier->initialPoint(), other_bezier->finalPoint());
+            return bezier_line_intersections<3>(*this, line);
+        }
+    }
+    return BezierCurve::intersect(other, eps);
 }
 
 template <>
@@ -358,6 +625,42 @@ void BezierCurveN<3>::feed(PathSink &sink, bool moveto_initial) const
     sink.curveTo(controlPoint(1), controlPoint(2), controlPoint(3));
 }
 
+static void bezier_expand_to_image(Rect &range, Point const &x0, Point const &x1, Point const &x2)
+{
+    for (auto i : { X, Y }) {
+        bezier_expand_to_image(range[i], x0[i], x1[i], x2[i]);
+    }
+}
+
+static void bezier_expand_to_image(Rect &range, Point const &x0, Point const &x1, Point const &x2, Point const &x3)
+{
+    for (auto i : { X, Y }) {
+        bezier_expand_to_image(range[i], x0[i], x1[i], x2[i], x3[i]);
+    }
+}
+
+template <>
+void BezierCurveN<1>::expandToTransformed(Rect &bbox, Affine const &transform) const
+{
+    bbox.expandTo(finalPoint() * transform);
+}
+
+template <>
+void BezierCurveN<2>::expandToTransformed(Rect &bbox, Affine const &transform) const
+{
+    bezier_expand_to_image(bbox, controlPoint(0) * transform,
+                                 controlPoint(1) * transform,
+                                 controlPoint(2) * transform);
+}
+
+template <>
+void BezierCurveN<3>::expandToTransformed(Rect &bbox, Affine const &transform) const
+{
+    bezier_expand_to_image(bbox, controlPoint(0) * transform,
+                                 controlPoint(1) * transform,
+                                 controlPoint(2) * transform,
+                                 controlPoint(3) * transform);
+}
 
 static Coord bezier_length_internal(std::vector<Point> &v1, Coord tolerance, int level)
 {
@@ -368,7 +671,7 @@ static Coord bezier_length_internal(std::vector<Point> &v1, Coord tolerance, int
      * error tolerance, we can be sure that the true value is no further than
      * 0.5 * tolerance from their arithmetic mean. When it's larger, we recursively
      * subdivide the Bezier curve into two parts and add their lengths.
-     * 
+     *
      * We cap the maximum number of subdivisions at 256, which corresponds to 8 levels.
      */
     Coord lower = distance(v1.front(), v1.back());
@@ -379,7 +682,7 @@ static Coord bezier_length_internal(std::vector<Point> &v1, Coord tolerance, int
     if (upper - lower <= 2*tolerance || level >= 8) {
         return (lower + upper) / 2;
     }
-        
+
 
     std::vector<Point> v2 = v1;
 

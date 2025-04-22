@@ -38,6 +38,13 @@
 #include <2geom/bezier.h>
 #include <2geom/solver.h>
 #include <2geom/concepts.h>
+#include <2geom/choose.h>
+
+// Workaround for GCC null-analyser false positives.
+// See https://gitlab.com/inkscape/lib2geom/-/issues/64
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wnonnull"
+#endif
 
 namespace Geom {
 
@@ -75,16 +82,16 @@ void Bezier::subdivide(Coord t, Bezier *left, Bezier *right) const
         left->c_.resize(size());
         if (right) {
             right->c_.resize(size());
-            casteljau_subdivision<double>(t, &const_cast<std::valarray<Coord>&>(c_)[0],
+            casteljau_subdivision<double>(t, &c_[0],
                 &left->c_[0], &right->c_[0], order());
         } else {
-            casteljau_subdivision<double>(t, &const_cast<std::valarray<Coord>&>(c_)[0],
-                &left->c_[0], NULL, order());
+            casteljau_subdivision<double>(t, &c_[0],
+                &left->c_[0], nullptr, order());
         }
     } else if (right) {
         right->c_.resize(size());
-        casteljau_subdivision<double>(t, &const_cast<std::valarray<Coord>&>(c_)[0],
-            NULL, &right->c_[0], order());
+        casteljau_subdivision<double>(t, &c_[0],
+            nullptr, &right->c_[0], order());
     }
 }
 
@@ -106,20 +113,23 @@ std::vector<Coord> Bezier::roots() const
 std::vector<Coord> Bezier::roots(Interval const &ivl) const
 {
     std::vector<Coord> solutions;
-    find_bernstein_roots(&const_cast<std::valarray<Coord>&>(c_)[0], order(), solutions, 0, ivl.min(), ivl.max());
+    find_bernstein_roots(&c_[0], order(), solutions, 0, ivl.min(), ivl.max());
     std::sort(solutions.begin(), solutions.end());
     return solutions;
 }
 
 Bezier Bezier::forward_difference(unsigned k) const
 {
-    Bezier fd(Order(order()-k));
-    unsigned n = fd.size();
+    Bezier fd(Order(order() - k));
+    int n = fd.size();
     
-    for(unsigned i = 0; i < n; i++) {
+    for (int i = 0; i < n; i++) {
         fd[i] = 0;
-        for(unsigned j = i; j < n; j++) {
-            fd[i] += (((j)&1)?-c_[j]:c_[j])*choose<double>(n, j-i);
+        int b = (i & 1) ? -1 : 1; // b = (-1)^j binomial(n, j - i)
+        for (int j = i; j < n; j++) {
+            fd[i] += c_[j] * b;
+            binomial_increment_k(b, n, j - i);
+            b = -b;
         }
     }
     return fd;
@@ -177,7 +187,7 @@ Bezier Bezier::deflate() const
 SBasis Bezier::toSBasis() const
 {
     SBasis sb;
-    bezier_to_sbasis(sb, (*this));
+    bezier_to_sbasis(sb, *this);
     return sb;
     //return bezier_to_sbasis(&c_[0], order());
 }
@@ -208,24 +218,32 @@ Bezier &Bezier::operator-=(Bezier const &other)
     return *this;
 }
 
-
-
 Bezier operator*(Bezier const &f, Bezier const &g)
 {
-    unsigned m = f.order();
-    unsigned n = g.order();
+    int m = f.order();
+    int n = g.order();
     Bezier h(Bezier::Order(m+n));
     // h_k = sum_(i+j=k) (m i)f_i (n j)g_j / (m+n k)
     
-    for(unsigned i = 0; i <= m; i++) {
-        const double fi = choose<double>(m,i)*f[i];
-        for(unsigned j = 0; j <= n; j++) {
-            h[i+j] += fi * choose<double>(n,j)*g[j];
+    int mci = 1;
+    for (int i = 0; i <= m; i++) {
+        double const fi = mci * f[i];
+
+        int ncj = 1;
+        for (int j = 0; j <= n; j++) {
+            h[i + j] += fi * ncj * g[j];
+            binomial_increment_k(ncj, n, j);
         }
+
+        binomial_increment_k(mci, m, i);
     }
-    for(unsigned k = 0; k <= m+n; k++) {
-        h[k] /= choose<double>(m+n, k);
+
+    int mnck = 1;
+    for (int k = 0; k <= m + n; k++) {
+        h[k] /= mnck;
+        binomial_increment_k(mnck, m + n, k);
     }
+
     return h;
 }
 
@@ -244,7 +262,7 @@ Bezier portion(Bezier const &a, double from, double to)
             if (to == 1) {
                 break;
             }
-            casteljau_subdivision<double>(to, &ret.c_[0], &ret.c_[0], NULL, ret.order());
+            casteljau_subdivision<double>(to, &ret.c_[0], &ret.c_[0], nullptr, ret.order());
             break; 
         }
         casteljau_subdivision<double>(from, &ret.c_[0], NULL, &ret.c_[0], ret.order());
@@ -286,8 +304,7 @@ Bezier integral(Bezier const &a)
 
 OptInterval bounds_fast(Bezier const &b)
 {
-    OptInterval ret = Interval::from_array(&const_cast<Bezier&>(b).c_[0], b.size());
-    return ret;
+    return Interval::from_array(&b.c_[0], b.size());
 }
 
 OptInterval bounds_exact(Bezier const &b)
@@ -310,7 +327,86 @@ OptInterval bounds_local(Bezier const &b, OptInterval const &i)
     }
 }
 
-} // end namespace Geom
+/*
+ * The general bézier of degree n is
+ *
+ *     p(t) = sum_{i = 0...n} binomial(n, i) t^i (1 - t)^(n - i) x[i]
+ *
+ * It can be written explicitly as a polynomial in t as
+ *
+ *     p(t) = sum_{i = 0...n} binomial(n, i) t^i [ sum_{j = 0...i} binomial(i, j) (-1)^(i - j) x[j] ]
+ *
+ * Its derivative is
+ *
+ *     p'(t) = n sum_{i = 1...n} binomial(n - 1, i - 1) t^(i - 1) [ sum_{j = 0...i} binomial(i, j) (-1)^(i - j) x[j] ]
+ *
+ * This is used by the various specialisations below as an optimisation for low degree n <= 3.
+ * In the remaining cases, the generic implementation is used which resorts to iteration.
+ */
+
+void bezier_expand_to_image(Interval &range, Coord x0, Coord x1, Coord x2)
+{
+    range.expandTo(x2);
+
+    if (range.contains(x1)) {
+        // The interval contains all control points, and therefore the entire curve.
+        return;
+    }
+
+    // p'(t) / 2 = at + b
+    auto a = (x2 - x1) - (x1 - x0);
+    auto b = x1 - x0;
+
+    // t = -b / a
+    if (std::abs(a) > EPSILON) {
+        auto t = -b / a;
+        if (t > 0.0 && t < 1.0) {
+            auto s = 1.0 - t;
+            auto x = s * s * x0 + 2 * s * t * x1 + t * t * x2;
+            range.expandTo(x);
+        }
+    }
+}
+
+void bezier_expand_to_image(Interval &range, Coord x0, Coord x1, Coord x2, Coord x3)
+{
+    range.expandTo(x3);
+
+    if (range.contains(x1) && range.contains(x2)) {
+        // The interval contains all control points, and therefore the entire curve.
+        return;
+    }
+
+    // p'(t) / 3 = at^2 + 2bt + c
+    auto a = (x3 - x0) - 3 * (x2 - x1);
+    auto b = (x2 - x1) - (x1 - x0);
+    auto c = x1 - x0;
+
+    auto expand = [&] (Coord t) {
+        if (t > 0.0 && t < 1.0) {
+            auto s = 1.0 - t;
+            auto x = s * s * s * x0 + 3 * s * s * t * x1 + 3 * t * t * s * x2 + t * t * t * x3;
+            range.expandTo(x);
+        }
+    };
+
+    // t = (-b ± sqrt(b^2 - ac)) / a
+    if (std::abs(a) < EPSILON) {
+        if (std::abs(b) > EPSILON) {
+            expand(-c / (2 * b));
+        }
+    } else {
+        auto d2 = b * b - a * c;
+        if (d2 >= 0.0) {
+            auto bsign = b >= 0.0 ? 1 : -1;
+            auto tmp = -(b + bsign * std::sqrt(d2));
+            expand(tmp / a);
+            expand(c / tmp); // Using Vieta's formula: product of roots == c/a
+        }
+    }
+}
+
+} // namespace Geom
 
 /*
   Local Variables:

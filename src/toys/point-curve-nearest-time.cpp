@@ -109,7 +109,7 @@ private:
     	        {
                     earc.set(psh.pts[0], 200, 150, 0, true, true, psh.pts[1]);
     	        }
-    	        catch( RangeError e )
+                catch (RangeError const &e)
     	        {
                     earc_constraints_satisfied = false;
     	        }
@@ -196,7 +196,7 @@ private:
     	        {
                     D.set(psh.pts[8], 160, 80, 0, true, true, psh.pts[9]);
     	        }
-    	        catch( RangeError e )
+                catch (RangeError const &e)
     	        {
                     earc_constraints_satisfied = false;
     	        }

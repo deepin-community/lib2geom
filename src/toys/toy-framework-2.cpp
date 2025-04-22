@@ -243,8 +243,6 @@ void Toy::scroll(GdkEventScroll* /*e*/) {
 }
 
 void Toy::canvas_click(Geom::Point at, int button) {
-    (void)at;
-    (void)button;
 }
 
 void Toy::mouse_released(GdkEventButton* e) {
@@ -262,7 +260,7 @@ void Toy::mouse_released(GdkEventButton* e) {
 
 void Toy::load(FILE* f) {
     char data[1024];
-    if (fscanf(f, "%1024s", data)) {
+    if (fscanf(f, "%1023s", data)) {
         name = data;
     }
     for(auto & handle : handles) {
@@ -315,7 +313,7 @@ void open_handles(GSimpleAction *, GVariant *, gpointer) {
     if (!the_toy) return;
 	GtkWidget* d = gtk_file_chooser_dialog_new(
 	     "Open handle configuration", GTK_WINDOW(the_window), GTK_FILE_CHOOSER_ACTION_OPEN,
-	     "Cancel", GTK_RESPONSE_CANCEL, "Open", GTK_RESPONSE_ACCEPT, NULL);
+         "Cancel", GTK_RESPONSE_CANCEL, "Open", GTK_RESPONSE_ACCEPT, nullptr);
     if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT) {
         const char* filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
         FILE* f = fopen(filename, "r");
@@ -329,7 +327,7 @@ void save_handles(GSimpleAction *, GVariant *, gpointer) {
     if (!the_toy) return;
     GtkWidget* d = gtk_file_chooser_dialog_new(
          "Save handle configuration", GTK_WINDOW(the_window), GTK_FILE_CHOOSER_ACTION_SAVE,
-         "Cancel", GTK_RESPONSE_CANCEL, "Save", GTK_RESPONSE_ACCEPT, NULL);
+         "Cancel", GTK_RESPONSE_CANCEL, "Save", GTK_RESPONSE_ACCEPT, nullptr);
     if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT) {
         const char* filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
         FILE* f = fopen(filename, "w");
@@ -387,7 +385,7 @@ void write_image(const char* filename) {
 void save_cairo(GSimpleAction *, GVariant *, gpointer) {
     GtkWidget* d = gtk_file_chooser_dialog_new(
         "Save file as svg, pdf or png", GTK_WINDOW(the_window), GTK_FILE_CHOOSER_ACTION_SAVE,
-        "Cancel", GTK_RESPONSE_CANCEL, "Save", GTK_RESPONSE_ACCEPT, NULL);
+        "Cancel", GTK_RESPONSE_CANCEL, "Save", GTK_RESPONSE_ACCEPT, nullptr);
     if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT) {
         const gchar *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
         write_image(filename);
@@ -586,7 +584,7 @@ void init(int argc, char **argv, Toy* t, int width, int height) {
     the_toy->name = argv_name;
     app_name += argv_name;
 
-    GtkApplication* app = gtk_application_new(app_name.c_str(), G_APPLICATION_FLAGS_NONE);
+    GtkApplication* app = gtk_application_new(app_name.c_str(), G_APPLICATION_DEFAULT_FLAGS);
     g_application_add_main_option_entries(G_APPLICATION(app), the_options);
     g_action_map_add_action_entries(G_ACTION_MAP(app), the_actions, G_N_ELEMENTS(the_actions), nullptr);
     g_signal_connect(G_OBJECT(app), "startup", G_CALLBACK(startup), nullptr);
@@ -653,7 +651,6 @@ static void activate(GApplication *app, gpointer) {
     assert(gtk_widget_is_focus(the_canvas));
 }
 
-
 void Toggle::draw(cairo_t *cr, bool /*annotes*/) {
     cairo_pattern_t* source = cairo_get_source(cr);
     double rc, gc, bc, aa;
@@ -700,20 +697,16 @@ void draw_toggles(cairo_t *cr, std::vector<Toggle> &ts) {
     for(auto & t : ts) t.draw(cr);
 }
 
-
-
 Slider::value_type Slider::value() const
 {
     Slider::value_type v = m_handle.pos[m_dir] - m_pos[m_dir];
     v =  ((m_max - m_min) / m_length) * v;
-    //std::cerr << "v : " << v << std::endl;
     if (m_step != 0)
     {
         int k = std::floor(v / m_step);
         v = k * m_step;
     }
     v = v + m_min;
-    //std::cerr << "v : " << v << std::endl;
     return v;
 }
 
@@ -934,6 +927,7 @@ void RectHandle::move_to(void* hit, Geom::Point om, Geom::Point m) {
             case 1: d = 0; side = 1; break;
             case 2: d = 1; side = 1; break;
             case 3: d = 0; side = 0; break;
+            default: assert(false);
         }
         if (side) {
             pos[d].setMax(m[d]);

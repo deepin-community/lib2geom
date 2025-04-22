@@ -270,6 +270,7 @@ public:
         return boundsExact();
     }
     Rect boundsExact() const override;
+    void expandToTransformed(Rect &bbox, Affine const &transform) const override;
     // TODO: native implementation of the following methods
     OptRect boundsLocal(OptInterval const &i, unsigned int deg) const override {
         return SBasisCurve(toSBasis()).boundsLocal(i, deg);
@@ -299,15 +300,18 @@ public:
     D2<SBasis> toSBasis() const override;
     Curve *portion(double f, double t) const override;
     Curve *reverse() const override;
-    bool operator==(Curve const &c) const override;
     bool isNear(Curve const &other, Coord precision) const override;
     void feed(PathSink &sink, bool moveto_initial) const override;
     int winding(Point const &p) const override;
+
+protected:
+    bool _equalTo(Curve const &c) const override;
 
 private:
     void _updateCenterAndAngles();
     std::vector<ShapeIntersection> _filterIntersections(std::vector<ShapeIntersection> &&xs, bool is_first) const;
     bool _validateIntersection(ShapeIntersection &xing, bool is_first) const;
+    std::vector<ShapeIntersection> _intersectSameEllipse(EllipticalArc const *other) const;
 
     Point _initial_point, _final_point;
     Ellipse _ellipse;

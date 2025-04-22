@@ -4,6 +4,7 @@
  *   MenTaLguY <mental@rydia.net>
  *   Marco Cecchetti <mrcekets at gmail.com>
  *   Krzysztof Kosiński <tweenk.pl@gmail.com>
+ *   Rafał Siejakowski <rs@rs-math.net>
  * 
  * Copyright 2007-2009 Authors
  *
@@ -38,8 +39,6 @@
 #include <2geom/sbasis-to-bezier.h>
 #include <2geom/ord.h>
 #include <2geom/path-sink.h>
-
-//#include <iostream>
 
 namespace Geom 
 {
@@ -103,46 +102,96 @@ std::vector<CurveIntersection> Curve::intersect(Curve const &/*other*/, Coord /*
 
 std::vector<CurveIntersection> Curve::intersectSelf(Coord eps) const
 {
-    std::vector<CurveIntersection> result;
-    // Monotonic segments cannot have self-intersections.
-    // Thus, we can split the curve at roots and intersect the portions.
-    std::vector<Coord> splits;
-    std::unique_ptr<Curve> deriv(derivative());
-    splits = deriv->roots(0, X);
-    if (splits.empty()) {
+    /// Represents a sub-arc of the curve.
+    struct Subcurve
+    {
+        std::unique_ptr<Curve> curve;
+        Interval parameter_range;
+
+        Subcurve(Curve *piece, Coord from, Coord to)
+            : curve{piece}
+            , parameter_range{from, to}
+        {}
+    };
+
+    /// A closure to split the curve into portions at the prescribed split points.
+    auto const split_into_subcurves = [this] (std::vector<Coord> const &splits) {
+        std::vector<Subcurve> result;
+        result.reserve(splits.size() + 1);
+        Coord previous = 0;
+        for (Coord split : splits) {
+            // Use global EPSILON since we're operating on normalized curve times.
+            if (split < EPSILON || split > 1.0 - EPSILON) {
+                continue;
+            }
+            result.emplace_back(portion(previous, split), previous, split);
+            previous = split;
+        }
+        result.emplace_back(portion(previous, 1.0), previous, 1.0);
         return result;
+    };
+
+    /// A closure to find pairwise intersections between the passed subcurves.
+    auto const pairwise_intersect = [=](std::vector<Subcurve> const &subcurves) {
+        std::vector<CurveIntersection> result;
+        for (unsigned i = 0; i < subcurves.size(); i++) {
+            for (unsigned j = i + 1; j < subcurves.size(); j++) {
+                auto const xings = subcurves[i].curve->intersect(*subcurves[j].curve, eps);
+                for (auto const &xing : xings) {
+                    // To avoid duplicate intersections, skip values at exactly 1.
+                    if (xing.first == 1. || xing.second == 1.) {
+                        continue;
+                    }
+                    Coord const ti = subcurves[i].parameter_range.valueAt(xing.first);
+                    Coord const tj = subcurves[j].parameter_range.valueAt(xing.second);
+                    result.emplace_back(ti, tj, xing.point());
+                }
+            }
+        }
+        std::sort(result.begin(), result.end());
+        return result;
+    };
+
+    // Monotonic segments cannot have self-intersections. Thus, we can split
+    // the curve at critical points of the X or Y coordinate and intersect
+    // the portions. However, there's the risk that a juncture between two
+    // adjacent portions is mistaken for an intersection due to numerical errors.
+    // Hence, we run the algorithm for both the X and Y coordinates and only
+    // keep the intersections that show up in both intersection lists.
+
+    // Find the critical points of both coordinates.
+    std::unique_ptr<Curve> deriv{derivative()};
+    auto const crits_x = deriv->roots(0, X);
+    auto const crits_y = deriv->roots(0, Y);
+    if (crits_x.empty() || crits_y.empty()) {
+        return {};
     }
-    deriv.reset();
-    splits.push_back(1.);
 
-    boost::ptr_vector<Curve> parts;
-    Coord previous = 0;
-    for (double split : splits) {
-        if (split == 0.) continue;
-        parts.push_back(portion(previous, split));
-        previous = split;
+    // Split into pieces in two ways and find self-intersections.
+    auto const pieces_x = split_into_subcurves(crits_x);
+    auto const pieces_y = split_into_subcurves(crits_y);
+    auto const crossings_from_x = pairwise_intersect(pieces_x);
+    auto const crossings_from_y = pairwise_intersect(pieces_y);
+    if (crossings_from_x.empty() || crossings_from_y.empty()) {
+        return {};
     }
 
-    Coord prev_i = 0;
-    for (unsigned i = 0; i < parts.size()-1; ++i) {
-        Interval dom_i(prev_i, splits[i]);
-        prev_i = splits[i];
-
-        Coord prev_j = 0;
-        for (unsigned j = i+1; j < parts.size(); ++j) {
-            Interval dom_j(prev_j, splits[j]);
-            prev_j = splits[j];
-
-            std::vector<CurveIntersection> xs = parts[i].intersect(parts[j], eps);
-            for (auto & x : xs) {
-                // to avoid duplicated intersections, skip values at exactly 1
-                if (x.first == 1. || x.second == 1.) continue;
-
-                Coord ti = dom_i.valueAt(x.first);
-                Coord tj = dom_j.valueAt(x.second);
-
-                CurveIntersection real(ti, tj, x.point());
-                result.push_back(real);
+    // Filter the results, only keeping self-intersections found by both approaches.
+    std::vector<CurveIntersection> result;
+    unsigned index_y = 0;
+    for (auto &&candidate_x : crossings_from_x) {
+        // Find a crossing corresponding to this one in the y-method collection.
+        while (index_y != crossings_from_y.size()) {
+            auto const gap = crossings_from_y[index_y].first - candidate_x.first;
+            if (std::abs(gap) < EPSILON) {
+                // We found the matching intersection!
+                result.emplace_back(candidate_x);
+                index_y++;
+                break;
+            } else if (gap < 0.0) {
+                index_y++;
+            } else {
+                break;
             }
         }
     }

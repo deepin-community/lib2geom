@@ -31,6 +31,7 @@
  * the specific language governing rights and limitations.
  */
 
+#include <2geom/conicsec.h>
 #include <2geom/ellipse.h>
 #include <2geom/elliptical-arc.h>
 #include <2geom/numeric/fitting-tool.h>
@@ -144,21 +145,29 @@ LineSegment Ellipse::semiaxis(Dim2 d, int sign) const
 
 Rect Ellipse::boundsExact() const
 {
-    Angle extremes[2][2];
-    double sinrot, cosrot;
-    sincos(_angle, sinrot, cosrot);
+    auto const trans = unitCircleTransform();
 
-    extremes[X][0] = std::atan2( -ray(Y) * sinrot, ray(X) * cosrot );
-    extremes[X][1] = extremes[X][0] + M_PI;
-    extremes[Y][0] = std::atan2( ray(Y) * cosrot, ray(X) * sinrot );
-    extremes[Y][1] = extremes[Y][0] + M_PI;
+    auto proj_bounds = [&] (Dim2 d) {
+        // The dth coordinate function pulls back to trans[d] * x + trans[d + 2] * y + trans[d + 4]
+        // in the coordinate system where the ellipse is a unit circle. We compute its range of
+        // values on the unit circle.
+        auto const r = std::hypot(trans[d], trans[d + 2]);
+        auto const mid = trans[d + 4];
+        return Interval(mid - r, mid + r);
+    };
 
-    Rect result;
-    for (unsigned d = 0; d < 2; ++d) {
-        result[d] = Interval(valueAt(extremes[d][0], d ? Y : X),
-                             valueAt(extremes[d][1], d ? Y : X));
-    }
-    return result;
+    return { proj_bounds(X), proj_bounds(Y) };
+}
+
+Rect Ellipse::boundsFast() const
+{
+    // Every ellipse is contained in the circle with the same center and radius
+    // equal to the larger of the two rays. We return the bounding square
+    // of this circle (this is really fast but only exact for circles).
+    auto const larger_ray = (ray(X) > ray(Y) ? ray(X) : ray(Y));
+    assert(larger_ray >= 0.0);
+    auto const rr = Point(larger_ray, larger_ray);
+    return Rect(_center - rr, _center + rr);
 }
 
 std::vector<double> Ellipse::coefficients() const
@@ -241,9 +250,6 @@ Ellipse::arc(Point const &ip, Point const &inner, Point const &fp)
     {
         large_arc_flag = true;
     }
-
-    //cross(-iv, fv) && large_arc_flag
-    
 
     // Determination of sweep flag:
     // For clarity, let's assume that Y grows up. Then the cross product
@@ -403,25 +409,77 @@ bool Ellipse::contains(Point const &p) const
     return tp.length() <= 1;
 }
 
+/** @brief Convert curve time on the major axis to the corresponding angle
+ *         parameters on a degenerate ellipse collapsed onto that axis.
+ * @param t The curve time on the major axis of an ellipse.
+ * @param vertical If true, the major axis goes from angle -π/2 to +π/2;
+ *                 otherwise, the major axis connects angles π and 0.
+ * @return The two angles at which the collapsed ellipse passes through the
+ *         major axis point corresponding to the given time \f$t \in [0, 1]\f$.
+ */
+static std::array<Coord, 2> axis_time_to_angles(Coord t, bool vertical)
+{
+    Coord const to_unit = std::clamp(2.0 * t - 1.0, -1.0, 1.0);
+    if (vertical) {
+        double const arcsin = std::asin(to_unit);
+        return {arcsin, M_PI - arcsin};
+    } else {
+        double const arccos = std::acos(to_unit);
+        return {arccos, -arccos};
+    }
+}
+
+/** @brief For each intersection of some shape with the major axis of an ellipse, produce one or two
+ *         intersections of a degenerate ellipse (collapsed onto that axis) with the same shape.
+ *
+ * @param axis_intersections The intersections of some shape with the major axis.
+ * @param vertical Whether this is the vertical major axis (in the ellipse's natural coordinates).
+ * @return A vector with doubled intersections (corresponding to the two passages of the squashed
+ *         ellipse through that point) and swapped order of the intersected shapes.
+*/
+static std::vector<ShapeIntersection> double_axis_intersections(std::vector<ShapeIntersection> &&axis_intersections,
+                                                                bool vertical)
+{
+    if (axis_intersections.empty()) {
+        return {};
+    }
+    std::vector<ShapeIntersection> result;
+    result.reserve(2 * axis_intersections.size());
+
+    for (auto const &x : axis_intersections) {
+        for (auto a : axis_time_to_angles(x.second, vertical)) {
+            result.emplace_back(a, x.first, x.point()); // Swap first <-> converted second.
+            if (x.second == 0.0 || x.second == 1.0) {
+                break; // Do not double up endpoint intersections.
+            }
+        }
+    }
+    return result;
+}
+
 std::vector<ShapeIntersection> Ellipse::intersect(Line const &line) const
 {
-
     std::vector<ShapeIntersection> result;
 
-    if (line.isDegenerate()) return result;
-    if (ray(X) == 0 || ray(Y) == 0) {
-        // TODO intersect with line segment.
+    if (line.isDegenerate()) {
         return result;
+    }
+    if (ray(X) == 0 || ray(Y) == 0) {
+        return double_axis_intersections(line.intersect(majorAxis()), ray(X) == 0);
     }
 
     // Ax^2 + Bxy + Cy^2 + Dx + Ey + F
-    Coord A, B, C, D, E, F;
-    coefficients(A, B, C, D, E, F);
+    std::array<Coord, 6> coeffs;
+    coefficients(coeffs[0], coeffs[1], coeffs[2], coeffs[3], coeffs[4], coeffs[5]);
+    rescale_homogenous(coeffs);
+    auto [A, B, C, D, E, F] = coeffs;
     Affine iuct = inverseUnitCircleTransform();
 
     // generic case
-    Coord a, b, c;
-    line.coefficients(a, b, c);
+    std::array<Coord, 3> line_coeffs;
+    line.coefficients(line_coeffs[0], line_coeffs[1], line_coeffs[2]);
+    rescale_homogenous(line_coeffs);
+    auto [a, b, c] = line_coeffs;
     Point lv = line.vector();
 
     if (fabs(lv[X]) > fabs(lv[Y])) {
@@ -458,58 +516,109 @@ std::vector<ShapeIntersection> Ellipse::intersect(Line const &line) const
 
 std::vector<ShapeIntersection> Ellipse::intersect(LineSegment const &seg) const
 {
-    // we simply re-use the procedure for lines and filter out
-    // results where the line time value is outside of the unit interval.
-    std::vector<ShapeIntersection> result = intersect(Line(seg));
-    filter_line_segment_intersections(result);
+    if (!boundsFast().intersects(seg.boundsFast())) {
+        return {};
+    }
+
+    // We simply reuse the procedure for lines and filter out
+    // results where the line time value is outside of the unit interval,
+    // but we apply a small tolerance to account for numerical errors.
+    double const param_prec = EPSILON / seg.length(0.0);
+    // TODO: accept a precision setting instead of always using EPSILON
+    // (requires an ABI break).
+
+    auto xings = intersect(Line(seg));
+    if (xings.empty()) {
+        return xings;
+    }
+    decltype(xings) result;
+    result.reserve(xings.size());
+
+    for (auto const &x : xings) {
+        if (x.second < -param_prec || x.second > 1.0 + param_prec) {
+            continue;
+        }
+        result.emplace_back(x.first, std::clamp(x.second, 0.0, 1.0), x.point());
+    }
     return result;
 }
 
 std::vector<ShapeIntersection> Ellipse::intersect(Ellipse const &other) const
 {
-    // handle degenerate cases first
-    if (ray(X) == 0 || ray(Y) == 0) {
-        
+    // Handle degenerate cases first.
+    if (ray(X) == 0 || ray(Y) == 0) { // Degenerate ellipse, collapsed to the major axis.
+        return double_axis_intersections(other.intersect(majorAxis()), ray(X) == 0);
     }
-    // intersection of two ellipses can be solved analytically.
-    // http://maptools.home.comcast.net/~maptools/BivariateQuadratics.pdf
+    if (*this == other) { // Two identical ellipses.
+        THROW_INFINITELY_MANY_SOLUTIONS("The two ellipses are identical.");
+    }
+    if (!boundsFast().intersects(other.boundsFast())) {
+        return {};
+    }
 
-    Coord A, B, C, D, E, F;
-    Coord a, b, c, d, e, f;
+    // Find coefficients of the implicit equations of the two ellipses and rescale
+    // them (losslessly) for better numerical conditioning.
+    std::array<double, 6> coeffs;
+    coefficients(coeffs[0], coeffs[1], coeffs[2], coeffs[3], coeffs[4], coeffs[5]);
+    rescale_homogenous(coeffs);
+    auto [A, B, C, D, E, F] = coeffs;
 
-    // NOTE: the order of coefficients is different to match the convention in the PDF above
-    // Ax^2 + Bx^2 + Cx + Dy + Exy + F
-    this->coefficients(A, E, B, C, D, F);
-    other.coefficients(a, e, b, c, d, f);
+    std::array<double, 6> otheffs;
+    other.coefficients(otheffs[0], otheffs[1], otheffs[2], otheffs[3], otheffs[4], otheffs[5]);
+    rescale_homogenous(otheffs);
+    auto [a, b, c, d, e, f] = otheffs;
 
-    // Assume that Q is the ellipse equation given by uppercase letters
-    // and R is the equation given by lowercase ones. An intersection exists when
-    // there is a coefficient mu such that
-    // mu Q + R = 0
+    // Assume that Q(x, y) = 0 is the ellipse equation given by uppercase letters
+    // and R(x, y) = 0 is the equation given by lowercase ones.
+    // In other words, Q is the quadratic function describing this ellipse and
+    // R is the quadratic function for the other ellipse.
     //
-    // This can be written in the following way:
+    // A point (x, y) is common to both ellipses if and only if it solves the system
+    // { Q(x, y) = 0,
+    // { R(x, y) = 0.
     //
-    //                    |  ff  cc/2 dd/2 | |1|
-    // mu Q + R = [1 x y] | cc/2  aa  ee/2 | |x| = 0
-    //                    | dd/2 ee/2  bb  | |y|
+    // If µ is any real number, we can multiply the first equation by µ and add that
+    // to the first equation, obtaining the new system of equations:
+    // {            Q(x, y) = 0,
+    // { µQ(x, y) + R(x, y) = 0.
     //
-    // where aa = mu A + a and so on. The determinant can be explicitly written out,
-    // giving an equation which is cubic in mu and can be solved analytically.
+    // The first equation still says that (x, y) is a point on this ellipse, but the
+    // second equation uses the new expression (µQ + R) instead of the original R.
+    //
+    // Why do we do this? The reason is that the set of functions {µQ + R : µ real}
+    // is a "real system of conics" and there's a theorem which guarantees that such a system
+    // always contains a "degenerate conic" [proof below].
+    // In practice, the degenerate conic will describe a line or a pair of lines, and intersecting
+    // a line with an ellipse is much easier than intersecting two ellipses directly.
+    //
+    // But in order to be able to do this, we must find a value of µ for which µQ + R is degenerate.
+    // We can write the expression (µQ + R)(x, y) in the following way:
+    //
+    //                          |  aa  bb/2 dd/2 | |x|
+    // (µQ + R)(x, y) = [x y 1] | bb/2  cc  ee/2 | |y|
+    //                          | dd/2 ee/2  ff  | |1|
+    //
+    // where aa = µA + a and so on. The determinant can be explicitly written out,
+    // giving an equation which is cubic in µ and can be solved analytically.
+    // The conic µQ + R is degenerate if and only if this determinant is 0.
+    //
+    // Proof that there's always a degenerate conic: a cubic real polynomial always has a root,
+    // and if the polynomial in µ isn't cubic (coefficient of µ^3 is zero), then the starting
+    // conic is already degenerate.
 
-    Coord I, J, K, L;
-    I = (-E*E*F + 4*A*B*F + C*D*E - A*D*D - B*C*C) / 4;
-    J = -((E*E - 4*A*B) * f + (2*E*F - C*D) * e + (2*A*D - C*E) * d +
-          (2*B*C - D*E) * c + (C*C - 4*A*F) * b + (D*D - 4*B*F) * a) / 4;
-    K = -((e*e - 4*a*b) * F + (2*e*f - c*d) * E + (2*a*d - c*e) * D +
-          (2*b*c - d*e) * C + (c*c - 4*a*f) * B + (d*d - 4*b*f) * A) / 4;
-    L = (-e*e*f + 4*a*b*f + c*d*e - a*d*d - b*c*c) / 4;
+    Coord I, J, K, L; // Coefficients of µ in the expression for the determinant.
+    I = (-B*B*F + 4*A*C*F + D*E*B - A*E*E - C*D*D) / 4;
+    J = -((B*B - 4*A*C) * f + (2*B*F - D*E) * b + (2*A*E - D*B) * e +
+          (2*C*D - E*B) * d + (D*D - 4*A*F) * c + (E*E - 4*C*F) * a) / 4;
+    K = -((b*b - 4*a*c) * F + (2*b*f - d*e) * B + (2*a*e - d*b) * E +
+          (2*c*d - e*b) * D + (d*d - 4*a*f) * C + (e*e - 4*c*f) * A) / 4;
+    L = (-b*b*f + 4*a*c*f + d*e*b - a*e*e - c*d*d) / 4;
 
     std::vector<Coord> mus = solve_cubic(I, J, K, L);
     Coord mu = infinity();
-    std::vector<ShapeIntersection> result;
 
-    // Now that we have solved for mu, we need to check whether the conic
-    // determined by mu Q + R is reducible to a product of two lines. If it's not,
+    // Now that we have solved for µ, we need to check whether the conic
+    // determined by µQ + R is reducible to a product of two lines. If it's not,
     // it means that there are no intersections. If it is, the intersections of these
     // lines with the original ellipses (if there are any) give the coordinates
     // of intersections.
@@ -521,68 +630,72 @@ std::vector<ShapeIntersection> Ellipse::intersect(Ellipse const &other) const
     if (mus.size() == 3) {
         std::swap(mus[1], mus[0]);
     }
-    for (double i : mus) {
-        Coord aa = i * A + a;
-        Coord bb = i * B + b;
-        Coord ee = i * E + e;
-        Coord delta = ee*ee - 4*aa*bb;
-        if (delta < 0) continue;
-        mu = i;
+    /// Discriminant within this radius of 0 will be considered zero.
+    static Coord const discriminant_precision = 1e-10;
+
+    for (Coord candidate_mu : mus) {
+        Coord const aa = std::fma(candidate_mu, A, a);
+        Coord const bb = std::fma(candidate_mu, B, b);
+        Coord const cc = std::fma(candidate_mu, C, c);
+        Coord const delta = sqr(bb) - 4*aa*cc;
+        if (delta < -discriminant_precision) {
+            continue;
+        }
+        mu = candidate_mu;
         break;
     }
 
     // if no suitable mu was found, there are no intersections
-    if (mu == infinity()) return result;
-
-    Coord aa = mu * A + a;
-    Coord bb = mu * B + b;
-    Coord cc = mu * C + c;
-    Coord dd = mu * D + d;
-    Coord ee = mu * E + e;
-    Coord ff = mu * F + f;
-
-    unsigned line_num = 0;
-    Line lines[2];
-
-    if (aa != 0) {
-        bb /= aa; cc /= aa; dd /= aa; ee /= aa; /*ff /= aa;*/
-        Coord s = (ee + std::sqrt(ee*ee - 4*bb)) / 2;
-        Coord q = ee - s;
-        Coord alpha = (dd - cc*q) / (s - q);
-        Coord beta = cc - alpha;
-
-        line_num = 2;
-        lines[0] = Line(1, q, alpha);
-        lines[1] = Line(1, s, beta);
-    } else if (bb != 0) {
-        cc /= bb; /*dd /= bb;*/ ee /= bb; ff /= bb;
-        Coord s = ee;
-        Coord q = 0;
-        Coord alpha = cc / ee;
-        Coord beta = ff * ee / cc;
-
-        line_num = 2;
-        lines[0] = Line(q, 1, alpha);
-        lines[1] = Line(s, 1, beta);
-    } else if (ee != 0) {
-        line_num = 2;
-        lines[0] = Line(ee, 0, dd);
-        lines[1] = Line(0, 1, cc/ee);
-    } else if (cc != 0 || dd != 0) {
-        line_num = 1;
-        lines[0] = Line(cc, dd, ff);
+    if (mu == infinity()) {
+        return {};
     }
 
-    // intersect with the obtained lines and report intersections
-    for (unsigned li = 0; li < line_num; ++li) {
-        std::vector<ShapeIntersection> as = intersect(lines[li]);
-        std::vector<ShapeIntersection> bs = other.intersect(lines[li]);
+    // Create the degenerate conic and decompose it into lines.
+    std::array<double, 6> degen = {std::fma(mu, A, a), std::fma(mu, B, b), std::fma(mu, C, c),
+                                   std::fma(mu, D, d), std::fma(mu, E, e), std::fma(mu, F, f)};
+    rescale_homogenous(degen);
+    auto const lines = xAx(degen[0], degen[1], degen[2],
+                           degen[3], degen[4], degen[5]).decompose_df(discriminant_precision);
 
-        if (!as.empty() && as.size() == bs.size()) {
-            for (unsigned i = 0; i < as.size(); ++i) {
-                ShapeIntersection ix(as[i].first, bs[i].first,
-                    middle_point(as[i].point(), bs[i].point()));
-                result.push_back(ix);
+    // intersect with the obtained lines and report intersections
+    std::vector<ShapeIntersection> result;
+    for (auto const &line : lines) {
+        if (line.isDegenerate()) {
+            continue;
+        }
+        auto as = intersect(line);
+        // NOTE: If we only cared about the intersection points, we could simply
+        // intersect this ellipse with the lines and ignore the other ellipse.
+        // But we need the time coordinates on the other ellipse as well.
+        auto bs = other.intersect(line);
+        if (as.empty() || bs.empty()) {
+            continue;
+        }
+        // Due to numerical errors, a tangency may sometimes be found as 1 intersection
+        // on one ellipse and 2 intersections on the other. If this happens, we average
+        // the points of the two intersections.
+        auto const intersection_average = [](ShapeIntersection const &i,
+                                             ShapeIntersection const &j) -> ShapeIntersection
+        {
+            return ShapeIntersection(i.first, j.first, middle_point(i.point(), j.point()));
+        };
+        auto const synthesize_intersection = [&](ShapeIntersection const &i,
+                                                 ShapeIntersection const &j) -> void
+        {
+            result.emplace_back(i.first, j.first, middle_point(i.point(), j.point()));
+        };
+        if (as.size() == 2) {
+            if (bs.size() == 2) {
+                synthesize_intersection(as[0], bs[0]);
+                synthesize_intersection(as[1], bs[1]);
+            } else if (bs.size() == 1) {
+                synthesize_intersection(intersection_average(as[0], as[1]), bs[0]);
+            }
+        } else if (as.size() == 1) {
+            if (bs.size() == 2) {
+                synthesize_intersection(as[0], intersection_average(bs[0], bs[1]));
+            } else if (bs.size() == 1) {
+                synthesize_intersection(as[0], bs[0]);
             }
         }
     }
@@ -594,6 +707,7 @@ std::vector<ShapeIntersection> Ellipse::intersect(D2<Bezier> const &b) const
     Coord A, B, C, D, E, F;
     coefficients(A, B, C, D, E, F);
 
+    // We plug the X and Y curves into the implicit equation and solve for t.
     Bezier x = A*b[X]*b[X] + B*b[X]*b[Y] + C*b[Y]*b[Y] + D*b[X] + E*b[Y] + F;
     std::vector<Coord> r = x.roots();
 

@@ -1325,6 +1325,149 @@ bool xAx::decompose (Line& l1, Line& l2) const
     return true;
 }
 
+std::array<Line, 2> xAx::decompose_df(Coord epsilon) const
+{
+    // For the classification of degenerate conics, see https://mathworld.wolfram.com/QuadraticCurve.html
+    using std::sqrt, std::abs;
+
+    // Create 2 degenerate lines
+    auto const origin = Point(0, 0);
+    std::array<Line, 2> result = {Line(origin, origin), Line(origin, origin)};
+
+    double A = c[0];
+    double B = c[1];
+    double C = c[2];
+    double D = c[3];
+    double E = c[4];
+    double F = c[5];
+    Coord discriminant = sqr(B) - 4 * A * C;
+    if (discriminant < -epsilon) {
+        return result;
+    }
+
+    bool single_line = false; // In the generic case, there will be 2 lines.
+    bool parallel_lines = false;
+    if (discriminant < epsilon) {
+        discriminant = 0;
+        parallel_lines = true;
+        // Check the secondary discriminant
+        Coord const secondary = sqr(D) + sqr(E) - 4 * F * (A + C);
+        if (secondary < -epsilon) {
+            return result;
+        }
+        single_line = (secondary < epsilon);
+    }
+
+    if (abs(A) > epsilon || abs(C) > epsilon) {
+        // This is the typical case: either x² or y² come with a nonzero coefficient.
+        // To guard against numerical errors, we check which of the coefficients A, C has larger absolute value.
+
+        bool const swap_xy = abs(C) > abs(A);
+        if (swap_xy) {
+            std::swap(A, C);
+            std::swap(D, E);
+        }
+
+        // From now on, we may assume that A is "reasonably large".
+        if (parallel_lines) {
+            if (single_line) {
+                // Special case: a single line.
+                std::array<double, 3> coeffs = {sqrt(abs(A)), sqrt(abs(C)), sqrt(abs(F))};
+                if (swap_xy) {
+                    std::swap(coeffs[0], coeffs[1]);
+                }
+                rescale_homogenous(coeffs);
+                result[0].setCoefficients(coeffs[0], coeffs[1], coeffs[2]);
+                return result;
+            }
+
+            // Two parallel lines.
+            Coord const quotient_discriminant = sqr(D) - 4 * A * F;
+            if (quotient_discriminant < 0) {
+                return result;
+            }
+            Coord const sqrt_disc = sqrt(quotient_discriminant);
+            double const c1 = 0.5 * (D - sqrt_disc);
+            double const c2 = c1 + sqrt_disc;
+            std::array<double, 3> coeffs = {A, 0.5 * B, c1};
+            if (swap_xy) {
+                std::swap(coeffs[0], coeffs[1]);
+            }
+            rescale_homogenous(coeffs);
+            result[0].setCoefficients(coeffs[0], coeffs[1], coeffs[2]);
+
+            coeffs = {A, 0.5 * B, c2};
+            if (swap_xy) {
+                std::swap(coeffs[0], coeffs[1]);
+            }
+            rescale_homogenous(coeffs);
+            result[1].setCoefficients(coeffs[0], coeffs[1], coeffs[2]);
+            return result;
+        }
+
+        // Now for the typical case of 2 non-parallel lines.
+
+        // We know that A is further away from 0 than C is.
+        // The mathematical derivation of the solution is as follows:
+        // let Δ = B² - 4AC (the discriminant); we know Δ > 0.
+        // Write δ = sqrt(Δ); we know that this is also positive.
+        // Then the product AΔ is nonzero, so the equation
+        // Ax² + Bxy + Cy² + Dx + Ey + F = 0
+        // is equivalent to
+        // AΔ (Ax² + Bxy + Cy² + Dx + Ey + F) = 0.
+        // Consider the two factors
+        // L_1 = Aδx + 0.5 (Bδ-Δ)y + EA - 0.5 D(B-δ)
+        // L_2 = Aδx + 0.5 (Bδ+Δ)y - EA + 0.5 D(B+δ)
+        // With a bit of algebra, you can show that L_1 * L_2 expands
+        // to AΔ (Ax² + Bxy + Cy² + Dx + Ey + F) (in order to get the
+        // correct value of F, you have to use the fact that the conic
+        // is degenerate). Therefore, the factors L_1 and L_2 are in
+        // fact equations of the two lines to be found.
+        Coord const delta = sqrt(discriminant);
+        std::array<double, 3> coeffs1 = {A * delta, 0.5 * (B * delta - discriminant), E * A - 0.5 * D * (B - delta)};
+        std::array<double, 3> coeffs2 = {coeffs1[0], coeffs1[1] + discriminant, D * delta - coeffs1[2]};
+        if (swap_xy) { // We must unswap the coefficients of x and y
+            std::swap(coeffs1[0], coeffs1[1]);
+            std::swap(coeffs2[0], coeffs2[1]);
+        }
+
+        unsigned index = 0;
+        if (coeffs1[0] != 0 || coeffs1[1] != 0) {
+            rescale_homogenous(coeffs1);
+            result[index++].setCoefficients(coeffs1[0], coeffs1[1], coeffs1[2]);
+        }
+        if (coeffs2[0] != 0 || coeffs2[1] != 0) {
+            rescale_homogenous(coeffs2);
+            result[index].setCoefficients(coeffs2[0], coeffs2[1], coeffs2[2]);
+        }
+        return result;
+    }
+
+    // If we're here, then A==0 and C==0.
+    if (abs(B) < epsilon) { // A == B == C == 0, so the conic reduces to Dx + Ey + F.
+        if (D == 0 && E == 0) {
+            return result;
+        }
+        std::array<double, 3> coeffs = {D, E, F};
+        rescale_homogenous(coeffs);
+        result[0].setCoefficients(coeffs[0], coeffs[1], coeffs[2]);
+        return result;
+    }
+
+    // OK, so A == C == 0 but B != 0. In other words, the conic has the form
+    // Bxy + Dx + Ey + F. Since B != 0, the zero set stays the same if we multiply the
+    // equation by B, which gives us this equation:
+    // B²xy + BDx + BEy + BF = 0.
+    // The above factors as (Bx + E)(By + D) = 0.
+    std::array<double, 2> nonzero_coeffs = {B, E};
+    rescale_homogenous(nonzero_coeffs);
+    result[0].setCoefficients(nonzero_coeffs[0], 0, nonzero_coeffs[1]);
+
+    nonzero_coeffs = {B, D};
+    rescale_homogenous(nonzero_coeffs);
+    result[1].setCoefficients(0, nonzero_coeffs[0], nonzero_coeffs[1]);
+    return result;
+}
 
 /*
  *  Return the rectangle that bound the conic section arc characterized by

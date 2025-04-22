@@ -32,13 +32,14 @@
 #ifndef LIB2GEOM_SEEN_CONVEX_HULL_H
 #define LIB2GEOM_SEEN_CONVEX_HULL_H
 
+#include <algorithm>
+#include <optional>
+#include <vector>
+#include <boost/operators.hpp>
+#include <boost/range/iterator_range.hpp>
 #include <2geom/point.h>
 #include <2geom/rect.h>
-#include <vector>
-#include <algorithm>
-#include <boost/operators.hpp>
-#include <optional>
-#include <boost/range/iterator_range.hpp>
+#include <2geom/transforms.h>
 
 namespace Geom {
 
@@ -57,12 +58,8 @@ class ConvexHullLowerIterator
         >
 {
 public:
-    typedef ConvexHullLowerIterator Self;
-    ConvexHullLowerIterator()
-        : _data(NULL)
-        , _size(0)
-        , _x(0)
-    {}
+    using Self = ConvexHullLowerIterator;
+    ConvexHullLowerIterator() = default;
     ConvexHullLowerIterator(std::vector<Point> const &pts, std::size_t x)
         : _data(&pts[0])
         , _size(pts.size())
@@ -103,29 +100,30 @@ public:
     }
 
 private:
-    Point const *_data;
-    std::size_t _size;
-    std::size_t _x;
+    Point const *_data = nullptr;
+    std::size_t _size = 0;
+    std::size_t _x = 0;
 };
 
-} // end anonymous namespace
+} // namespace
 
 /**
  * @brief Convex hull based on the Andrew's monotone chain algorithm.
  * @ingroup Shapes
  */
-class ConvexHull {
+class ConvexHull
+{
 public:
-    typedef std::vector<Point>::const_iterator iterator;
-    typedef std::vector<Point>::const_iterator const_iterator;
-    typedef std::vector<Point>::const_iterator UpperIterator;
-    typedef ConvexHullLowerIterator LowerIterator;
+    using iterator = std::vector<Point>::const_iterator;
+    using const_iterator = std::vector<Point>::const_iterator;
+    using UpperIterator = std::vector<Point>::const_iterator;
+    using LowerIterator = ConvexHullLowerIterator;
 
     /// @name Construct a convex hull.
     /// @{
 
     /// Create an empty convex hull.
-    ConvexHull() {}
+    ConvexHull() = default;
     /// Construct a singular convex hull.
     explicit ConvexHull(Point const &a)
         : _boundary(1, a)
@@ -167,8 +165,6 @@ public:
     double area() const;
     //Point centroid() const;
     //double areaAndCentroid(Point &c);
-    //FatLine maxDiameter() const;
-    //FatLine minDiameter() const;
     /// @}
 
     /// @name Inspect bounds and extreme points.
@@ -176,6 +172,9 @@ public:
 
     /// Compute the bounding rectangle of the convex hull.
     OptRect bounds() const;
+    /// Return a rotation that puts the convex hull into a position
+    /// such that bounds() has minimal area, and return those bounds.
+    std::pair<Rotate, OptRect> minAreaRotation() const;
 
     /// Get the leftmost (minimum X) coordinate of the hull.
     Coord left() const { return _boundary[0][X]; }
@@ -214,16 +213,13 @@ public:
     Point const &front() const { return _boundary.front(); }
     /// Get the penultimate point of the lower hull.
     Point const &back() const { return _boundary.back(); }
-    Point const &operator[](std::size_t i) const {
-        return _boundary[i];
-    }
+    Point const &operator[](std::size_t i) const { return _boundary[i]; }
 
     /** @brief Get an iterator range to the upper part of the hull.
      * This returns a range that includes the leftmost point,
      * all points of the upper hull, and the rightmost point. */
     boost::iterator_range<UpperIterator> upperHull() const {
-        boost::iterator_range<UpperIterator> r(_boundary.begin(), _boundary.begin() + _lower);
-        return r;
+        return boost::iterator_range<UpperIterator>(_boundary.begin(), _boundary.begin() + _lower);
     }
 
     /** @brief Get an iterator range to the lower part of the hull.
@@ -276,7 +272,6 @@ public:
 
 private:
     void _construct();
-    static bool _is_clockwise_turn(Point const &a, Point const &b, Point const &c);
 
     /// Take a vector of points and produce a pruned sorted vector.
     template <typename Iter>
@@ -321,16 +316,15 @@ private:
 
 /** @brief Output operator for convex hulls.
  * Prints out all the coordinates. */
-inline std::ostream &operator<< (std::ostream &out_file, const Geom::ConvexHull &in_cvx) {
-    out_file << "ConvexHull(";
-    for(auto i : in_cvx) {
-        out_file << i << ", ";
+inline std::ostream &operator<<(std::ostream &out, Geom::ConvexHull const &hull) {
+    out << "ConvexHull(";
+    for (auto i : hull) {
+        out << i << ", ";
     }
-    out_file << ")";
-    return out_file;
+    return out << ")";
 }
 
-} // end namespace Geom
+} // namespace Geom
 
 #endif // LIB2GEOM_SEEN_CONVEX_HULL_H
 

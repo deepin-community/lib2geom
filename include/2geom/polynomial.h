@@ -5,7 +5,8 @@
  * Authors:
  *    MenTaLguY <mental@rydia.net>
  *    Krzysztof Kosiński <tweenk.pl@gmail.com>
- * 
+ *    Rafał Siejakowski <rs@rs-math.net>
+ *
  * Copyright 2007-2015 Authors
  *
  * This library is free software; you can redistribute it and/or
@@ -228,6 +229,10 @@ std::vector<Coord> solve_quadratic(Coord a, Coord b, Coord c);
  * Only real roots are returned. */
 std::vector<Coord> solve_cubic(Coord a, Coord b, Coord c, Coord d);
 
+/** @brief Analytically solve quartic equation.
+ * The equation is given in the standard form: ax^4 + bx^3 + cx^2 + dx + e = 0.
+ * Only real roots are returned. */
+std::vector<Coord> solve_quartic(Coord a, Coord b, Coord c, Coord d, Coord e);
 
 inline std::ostream &operator<< (std::ostream &out_file, const Poly &in_poly) {
     if(in_poly.size() == 0)

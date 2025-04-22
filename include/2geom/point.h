@@ -35,8 +35,11 @@
 #ifndef LIB2GEOM_SEEN_POINT_H
 #define LIB2GEOM_SEEN_POINT_H
 
+#include <cassert>
 #include <iostream>
 #include <iterator>
+#include <tuple>
+#include <boost/functional/hash.hpp>
 #include <boost/operators.hpp>
 #include <2geom/forward.h>
 #include <2geom/coord.h>
@@ -50,6 +53,8 @@ class Point
     : boost::additive< Point
     , boost::totally_ordered< Point
     , boost::multiplicative< Point, Coord
+    , boost::multiplicative< Point
+    , boost::multiplicative< Point, IntPoint
     , MultipliableNoncommutative< Point, Affine
     , MultipliableNoncommutative< Point, Translate
     , MultipliableNoncommutative< Point, Rotate
@@ -57,36 +62,31 @@ class Point
     , MultipliableNoncommutative< Point, HShear
     , MultipliableNoncommutative< Point, VShear
     , MultipliableNoncommutative< Point, Zoom
-      > > > > > > > > > > // base class chaining, see documentation for Boost.Operator
+      >>>>>>>>>>>> // base class chaining, see documentation for Boost.Operator
 {
-    Coord _pt[2];
+    Coord _pt[2] = { 0, 0 };
 public:
-    typedef Coord D1Value;
-    typedef Coord &D1Reference;
-    typedef Coord const &D1ConstReference;
+    using D1Value = Coord;
+    using D1Reference = Coord &;
+    using D1ConstReference = Coord const &;
 
     /// @name Create points
     /// @{
-    /** Construct a point on the origin. */
-    Point()
-    { _pt[X] = _pt[Y] = 0; }
-
+    /** Construct a point at the origin. */
+    constexpr Point() = default;
     /** Construct a point from its coordinates. */
-    Point(Coord x, Coord y) {
-        _pt[X] = x; _pt[Y] = y;
-    }
+    constexpr Point(Coord x, Coord y)
+        : _pt{ x, y }
+    {}
     /** Construct from integer point. */
-    Point(IntPoint const &p) {
-        _pt[X] = p[X];
-        _pt[Y] = p[Y];
-    }
+    constexpr Point(IntPoint const &p)
+        : Point(p[X], p[Y])
+    {}
     /** @brief Construct a point from its polar coordinates.
      * The angle is specified in radians, in the mathematical convention (increasing
      * counter-clockwise from +X). */
     static Point polar(Coord angle, Coord radius) {
-        Point ret(polar(angle));
-        ret *= radius;
-        return ret;
+        return polar(angle) * radius;
     }
     /** @brief Construct an unit vector from its angle.
      * The angle is specified in radians, in the mathematical convention (increasing
@@ -96,26 +96,30 @@ public:
 
     /// @name Access the coordinates of a point
     /// @{
-    Coord operator[](unsigned i) const { return _pt[i]; }
-    Coord &operator[](unsigned i) { return _pt[i]; }
+    Coord operator[](unsigned i) const { assert(i < 2); return _pt[i]; }
+    Coord &operator[](unsigned i) { assert(i < 2); return _pt[i]; }
+    constexpr Coord operator[](Dim2 d) const noexcept { return _pt[d]; }
+    constexpr Coord &operator[](Dim2 d) noexcept { return _pt[d]; }
 
-    Coord operator[](Dim2 d) const noexcept { return _pt[d]; }
-    Coord &operator[](Dim2 d) noexcept { return _pt[d]; }
+    constexpr Coord x() const noexcept { return _pt[X]; }
+    constexpr Coord &x() noexcept { return _pt[X]; }
+    constexpr Coord y() const noexcept { return _pt[Y]; }
+    constexpr Coord &y() noexcept { return _pt[Y]; }
 
-    Coord x() const noexcept { return _pt[X]; }
-    Coord &x() noexcept { return _pt[X]; }
-    Coord y() const noexcept { return _pt[Y]; }
-    Coord &y() noexcept { return _pt[Y]; }
+    // Structured binding support
+    template <size_t I> constexpr Coord get() const { static_assert(I < 2); return _pt[I]; }
+    template <size_t I> constexpr Coord &get() { static_assert(I < 2); return _pt[I]; }
     /// @}
 
     /// @name Vector operations
     /// @{
     /** @brief Compute the distance from origin.
      * @return Length of the vector from origin to this point */
-    Coord length() const { return hypot(_pt[0], _pt[1]); }
+    Coord length() const { return std::hypot(_pt[X], _pt[Y]); }
+    constexpr Coord lengthSq() const { return _pt[X] * _pt[X] + _pt[Y] * _pt[Y]; }
     void normalize();
     Point normalized() const {
-        Point ret(*this);
+        auto ret = *this;
         ret.normalize();
         return ret;
     }
@@ -123,42 +127,59 @@ public:
     /** @brief Return a point like this point but rotated -90 degrees.
      * If the y axis grows downwards and the x axis grows to the
      * right, then this is 90 degrees counter-clockwise. */
-    Point ccw() const {
+    constexpr Point ccw() const {
         return Point(_pt[Y], -_pt[X]);
     }
 
     /** @brief Return a point like this point but rotated +90 degrees.
      * If the y axis grows downwards and the x axis grows to the
      * right, then this is 90 degrees clockwise. */
-    Point cw() const {
+    constexpr Point cw() const {
         return Point(-_pt[Y], _pt[X]);
     }
     /// @}
 
     /// @name Vector-like arithmetic operations
     /// @{
-    Point operator-() const {
+    constexpr Point operator-() const {
         return Point(-_pt[X], -_pt[Y]);
     }
-    Point &operator+=(Point const &o) {
-        for ( unsigned i = 0 ; i < 2 ; ++i ) {
-            _pt[i] += o._pt[i];
-        }
+    constexpr Point &operator+=(Point const &o) {
+        _pt[X] += o._pt[X];
+        _pt[Y] += o._pt[Y];
         return *this;
     }
-    Point &operator-=(Point const &o) {
-        for ( unsigned i = 0 ; i < 2 ; ++i ) {
-            _pt[i] -= o._pt[i];
-        }
+    constexpr Point &operator-=(Point const &o) {
+        _pt[X] -= o._pt[X];
+        _pt[Y] -= o._pt[Y];
         return *this;
     }
-    Point &operator*=(Coord s) {
-        for (double & i : _pt) i *= s;
+    constexpr Point &operator*=(Coord s) {
+        for (auto &i : _pt) i *= s;
         return *this;
     }
-    Point &operator/=(Coord s) {
-        //TODO: s == 0?
-        for (double & i : _pt) i /= s;
+    constexpr Point &operator*=(Point const &o) {
+        _pt[X] *= o._pt[X];
+        _pt[Y] *= o._pt[Y];
+        return *this;
+    }
+    constexpr Point &operator*=(IntPoint const &o) {
+        _pt[X] *= o.x();
+        _pt[Y] *= o.y();
+        return *this;
+    }
+    constexpr Point &operator/=(Coord s) {
+        for (auto &i : _pt) i /= s;
+        return *this;
+    }
+    constexpr Point &operator/=(Point const &o) {
+        _pt[X] /= o._pt[X];
+        _pt[Y] /= o._pt[Y];
+        return *this;
+    }
+    constexpr Point &operator/=(IntPoint const &o) {
+        _pt[X] /= o.x();
+        _pt[Y] /= o.y();
         return *this;
     }
     /// @}
@@ -179,18 +200,15 @@ public:
     /// @{
     /** @brief Round to nearest integer coordinates. */
     IntPoint round() const {
-        IntPoint ret(::round(_pt[X]), ::round(_pt[Y]));
-        return ret;
+        return IntPoint(::round(_pt[X]), ::round(_pt[Y]));
     }
     /** @brief Round coordinates downwards. */
     IntPoint floor() const {
-        IntPoint ret(::floor(_pt[X]), ::floor(_pt[Y]));
-        return ret;
+        return IntPoint(::floor(_pt[X]), ::floor(_pt[Y]));
     }
     /** @brief Round coordinates upwards. */
     IntPoint ceil() const {
-        IntPoint ret(::ceil(_pt[X]), ::ceil(_pt[Y]));
-        return ret;
+        return IntPoint(::ceil(_pt[X]), ::ceil(_pt[Y]));
     }
     /// @}
 
@@ -198,30 +216,32 @@ public:
     /// @{
     /** @brief Check whether both coordinates are finite. */
     bool isFinite() const {
-        for (double i : _pt) {
-            if(!std::isfinite(i)) return false;
+        for (auto i : _pt) {
+            if (!std::isfinite(i)) {
+                return false;
+            }
         }
         return true;
     }
     /** @brief Check whether both coordinates are zero. */
-    bool isZero() const {
+    constexpr bool isZero() const {
         return _pt[X] == 0 && _pt[Y] == 0;
     }
     /** @brief Check whether the length of the vector is close to 1. */
-    bool isNormalized(Coord eps=EPSILON) const {
+    bool isNormalized(Coord eps = EPSILON) const {
         return are_near(length(), 1.0, eps);
     }
     /** @brief Equality operator.
      * This tests for exact identity (as opposed to are_near()). Note that due to numerical
      * errors, this test might return false even if the points should be identical. */
-    bool operator==(const Point &in_pnt) const {
-        return (_pt[X] == in_pnt[X]) && (_pt[Y] == in_pnt[Y]);
+    constexpr bool operator==(Point const &p) const {
+        return _pt[X] == p[X] && _pt[Y] == p[Y];
     }
     /** @brief Lexicographical ordering for points.
      * Y coordinate is regarded as more significant. When sorting according to this
      * ordering, the points will be sorted according to the Y coordinate, and within
      * points with the same Y coordinate according to the X coordinate. */
-    bool operator<(const Point &p) const {
+    constexpr bool operator<(Point const &p) const {
         return _pt[Y] < p[Y] || (_pt[Y] == p[Y] && _pt[X] < p[X]);
     }
     /// @}
@@ -244,13 +264,12 @@ public:
     private:
         Dim2 dim;
     };
-    //template <typename First = std::less<Coord>, typename Second = std::less<Coord> > LexOrder
 };
 
 /** @brief Output operator for points.
  * Prints out the coordinates.
  * @relates Point */
-std::ostream &operator<<(std::ostream &out, const Geom::Point &p);
+std::ostream &operator<<(std::ostream &out, Point const &p);
 
 template<> struct Point::LexLess<X> {
     typedef std::less<Coord> Primary;
@@ -309,8 +328,8 @@ inline Coord L2(Point const &p) {
  * Warning: this can overflow where L2 won't.
  * @return \f$p_X^2 + p_Y^2\f$
  * @relates Point */
-inline Coord L2sq(Point const &p) {
-    return p[0]*p[0] + p[1]*p[1];
+constexpr Coord L2sq(Point const &p) {
+    return p.lengthSq();
 }
 
 /** @brief Returns p * Geom::rotate_degrees(90), but more efficient.
@@ -322,7 +341,7 @@ inline Coord L2sq(Point const &p) {
  *
  * There is no function to rotate by -90 degrees: use -rot90(p) instead.
  * @relates Point */
-inline Point rot90(Point const &p) {
+constexpr Point rot90(Point const &p) {
     return Point(-p[Y], p[X]);
 }
 
@@ -349,7 +368,7 @@ inline Point middle_point(Point const &p1, Point const &p2) {
  * and the sign depends on whether they point in the same direction (+) or opposite ones (-).
  * @return \f$a \cdot b = a_X b_X + a_Y b_Y\f$.
  * @relates Point */
-inline Coord dot(Point const &a, Point const &b) {
+constexpr Coord dot(Point const &a, Point const &b) {
     return a[X] * b[X] + a[Y] * b[Y];
 }
 
@@ -358,7 +377,7 @@ inline Coord dot(Point const &a, Point const &b) {
  * and the absolute value will be highest for perpendicular vectors.
  * @return \f$a \times b = a_X b_Y - a_Y b_X\f$.
  * @relates Point*/
-inline Coord cross(Point const &a, Point const &b)
+constexpr Coord cross(Point const &a, Point const &b)
 {
     // equivalent implementation:
     // return dot(a, b.ccw());
@@ -367,13 +386,13 @@ inline Coord cross(Point const &a, Point const &b)
 
 /// Compute the (Euclidean) distance between points.
 /// @relates Point
-inline Coord distance (Point const &a, Point const &b) {
+inline Coord distance(Point const &a, Point const &b) {
     return (a - b).length();
 }
 
 /// Compute the square of the distance between points.
 /// @relates Point
-inline Coord distanceSq (Point const &a, Point const &b) {
+inline Coord distanceSq(Point const &a, Point const &b) {
     return L2sq(a - b);
 }
 
@@ -393,10 +412,10 @@ inline bool are_near_rel(Point const &a, Point const &b, double eps = EPSILON) {
 
 /// Test whether three points lie approximately on the same line.
 /// @relates Point
-inline bool are_collinear(Point const& p1, Point const& p2, Point const& p3,
+inline bool are_collinear(Point const &p1, Point const &p2, Point const &p3,
                           double eps = EPSILON)
 {
-    return are_near( cross(p3, p2) - cross(p3, p1) + cross(p2, p1), 0, eps);
+    return are_near(cross(p1, p2) + cross(p2, p3) + cross(p3, p1), 0, eps);
 }
 
 Point unit_vector(Point const &a);
@@ -407,9 +426,9 @@ bool is_unit_vector(Point const &p, Coord eps = EPSILON);
 double atan2(Point const &p);
 double angle_between(Point const &a, Point const &b);
 Point abs(Point const &b);
-Point constrain_angle(Point const &A, Point const &B, unsigned int n = 4, Geom::Point const &dir = Geom::Point(1,0));
+Point constrain_angle(Point const &A, Point const &B, unsigned n = 4, Point const &dir = {1, 0});
 
-} // end namespace Geom
+} // namespace Geom
 
 // This is required to fix a bug in GCC 4.3.3 (and probably others) that causes the compiler
 // to try to instantiate the iterator_traits template and fail. Probably it thinks that Point
@@ -417,6 +436,21 @@ Point constrain_angle(Point const &A, Point const &B, unsigned int n = 4, Geom::
 namespace std {
 template <> class iterator_traits<Geom::Point> {};
 }
+
+// Structured binding support
+template <> struct std::tuple_size<Geom::Point> : std::integral_constant<size_t, 2> {};
+template <size_t I> struct std::tuple_element<I, Geom::Point> { using type = Geom::Coord; };
+
+// Hash support
+template <> struct std::hash<Geom::Point>
+{
+    size_t operator()(Geom::Point const &p) const noexcept {
+        size_t hash = 0;
+        boost::hash_combine(hash, p.x());
+        boost::hash_combine(hash, p.y());
+        return hash;
+    }
+};
 
 #endif // LIB2GEOM_SEEN_POINT_H
 

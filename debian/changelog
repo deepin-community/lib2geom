@@ -1,8 +1,74 @@
-lib2geom (1.2.2-3deepin0) unstable; urgency=medium
+lib2geom (1.4-4) unstable; urgency=medium
 
-  * No source change upload against GCC 12.
+  * Team upload
+  * Release to unstable
 
- -- Tianyu Chen <sweetyfish@deepin.org>  Thu, 19 Sep 2024 22:52:52 +0800
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 14 Mar 2025 20:14:53 -0400
+
+lib2geom (1.4-3) experimental; urgency=medium
+
+  * Team upload.
+  * Fix pkgconf package name.
+
+ -- Bastian Germann <bage@debian.org>  Mon, 09 Dec 2024 18:59:26 +0100
+
+lib2geom (1.4-2) experimental; urgency=medium
+
+  * Team upload
+  * Disable failing tests SolveQuartic
+  * Replace B-D: pkg-config with pkgconf
+
+  [ Pino Toscano ]
+  * d/rules: Apply i386 float precision work-around on any OS, not only Linux
+
+ -- Bastian Germann <bage@debian.org>  Mon, 09 Dec 2024 08:56:38 +0100
+
+lib2geom (1.4-1) experimental; urgency=medium
+
+  * Team upload
+  * d/watch: Fix for new Gitlab website
+  * New upstream version 1.4
+
+ -- Bastian Germann <bage@debian.org>  Fri, 06 Dec 2024 08:46:06 +0100
+
+lib2geom (1.3-3) experimental; urgency=medium
+
+  * Team upload
+  * debian/control: Bump Standards-Version
+  * debian/rules: Work-around issues with float precision on i386 (Closes:
+    #1051980)
+
+ -- Sebastian Ramacher <sramacher@debian.org>  Wed, 01 May 2024 17:09:10 +0200
+
+lib2geom (1.3-2) experimental; urgency=medium
+
+  * Add patch to disable a failing tests.
+
+ -- Mattia Rizzolo <mattia@debian.org>  Sat, 09 Sep 2023 11:23:33 +0530
+
+lib2geom (1.3-1) experimental; urgency=medium
+
+  * New upstream version 1.3.
+  * Bump copyright years.
+  * Rename lib2geom library package to follow the bumped SOVERSION.
+  * Restore a file that may be modified at build time. (Closes: #1048245)
+
+ -- Mattia Rizzolo <mattia@debian.org>  Mon, 04 Sep 2023 11:04:33 +0530
+
+lib2geom (1.2.2-4) unstable; urgency=medium
+
+  * Team upload.
+  * debian/rules: Work-around issues with float precision on i386 (Closes:
+    #1051980)
+
+ -- Sebastian Ramacher <sramacher@debian.org>  Wed, 01 May 2024 17:21:27 +0200
+
+lib2geom (1.2.2-3.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Rename libraries for 64-bit time_t transition.  Closes: #1062322
+
+ -- Lukas Märdian <slyon@debian.org>  Thu, 29 Feb 2024 08:25:45 +0000
 
 lib2geom (1.2.2-3) unstable; urgency=medium
 

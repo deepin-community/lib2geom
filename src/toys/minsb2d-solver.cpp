@@ -281,7 +281,7 @@ public:
      
             size_t iter = 0;
             int status;
-            double size;
+            double size = 0;
      
             /* Starting point */
             x = gsl_vector_alloc (2);

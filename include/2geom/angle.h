@@ -383,12 +383,12 @@ private:
 
 /** @brief Given an angle in degrees, return radians
  * @relates Angle */
-inline Coord rad_from_deg(Coord deg) { return deg*M_PI/180.0;}
+inline constexpr Coord rad_from_deg(Coord deg) { return deg / 180.0 * M_PI;}
 /** @brief Given an angle in radians, return degrees
  * @relates Angle */
-inline Coord deg_from_rad(Coord rad) { return rad*180.0/M_PI;}
+inline constexpr Coord deg_from_rad(Coord rad) { return rad / M_PI * 180.0;}
 
-} // end namespace Geom
+} // namespace Geom
 
 namespace std {
 template <> class iterator_traits<Geom::Angle> {};

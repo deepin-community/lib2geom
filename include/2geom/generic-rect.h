@@ -58,36 +58,27 @@ template <typename C>
 class GenericRect
     : CoordTraits<C>::RectOps
 {
-    typedef typename CoordTraits<C>::IntervalType CInterval;
-    typedef typename CoordTraits<C>::PointType CPoint;
-    typedef typename CoordTraits<C>::RectType CRect;
-    typedef typename CoordTraits<C>::OptRectType OptCRect;
+    using CInterval = typename CoordTraits<C>::IntervalType;
+    using CPoint = typename CoordTraits<C>::PointType;
+    using CRect = typename CoordTraits<C>::RectType;
+    using OptCRect = typename CoordTraits<C>::OptRectType;
 protected:
     CInterval f[2];
 public:
-    typedef CInterval D1Value;
-    typedef CInterval &D1Reference;
-    typedef CInterval const &D1ConstReference;
+    using D1Value = CInterval;
+    using D1Reference = CInterval &;
+    using D1ConstReference = CInterval const &;
 
     /// @name Create rectangles.
     /// @{
-    /** @brief Create a rectangle that contains only the point at (0,0). */
-    GenericRect() { f[X] = f[Y] = CInterval(); }
+    /** @brief Create a rectangle that contains only the point at (0, 0). */
+    GenericRect() = default;
     /** @brief Create a rectangle from X and Y intervals. */
-    GenericRect(CInterval const &a, CInterval const &b) {
-        f[X] = a;
-        f[Y] = b;
-    }
+    GenericRect(CInterval const &a, CInterval const &b) : f{a, b} {}
     /** @brief Create a rectangle from two points. */
-    GenericRect(CPoint const &a, CPoint const &b) {
-        f[X] = CInterval(a[X], b[X]);
-        f[Y] = CInterval(a[Y], b[Y]);
-    }
+    GenericRect(CPoint const &a, CPoint const &b) : f{{a[X], b[X]}, {a[Y], b[Y]}} {}
     /** @brief Create rectangle from coordinates of two points. */
-    GenericRect(C x0, C y0, C x1, C y1) {
-        f[X] = CInterval(x0, x1);
-        f[Y] = CInterval(y0, y1);
-    }
+    GenericRect(C x0, C y0, C x1, C y1) : f{{x0, x1}, {y0, y1}} {}
     /** @brief Create a rectangle from a range of points.
      * The resulting rectangle will contain all points from the range.
      * The return type of iterators must be convertible to Point.
@@ -98,36 +89,30 @@ public:
     template <typename InputIterator>
     static CRect from_range(InputIterator start, InputIterator end) {
         assert(start != end);
-        CPoint p1 = *start++;
-        CRect result(p1, p1);
-        for (; start != end; ++start) {
+        CPoint p1 = *start;
+        auto result = CRect(p1, p1);
+        for (++start; start != end; ++start) {
             result.expandTo(*start);
         }
         return result;
     }
     /** @brief Create a rectangle from a C-style array of points it should contain. */
     static CRect from_array(CPoint const *c, unsigned n) {
-        CRect result = GenericRect<C>::from_range(c, c+n);
-        return result;
+        return GenericRect<C>::from_range(c, c + n);
     }
     /** @brief Create rectangle from origin and dimensions. */
     static CRect from_xywh(C x, C y, C w, C h) {
-        CPoint xy(x, y);
-        CPoint wh(w, h);
-        CRect result(xy, xy + wh);
-        return result;
+        return GenericRect<C>::from_xywh(CPoint(x, y), CPoint(w, h));
     }
     /** @brief Create rectangle from origin and dimensions. */
     static CRect from_xywh(CPoint const &xy, CPoint const &wh) {
-        CRect result(xy, xy + wh);
-        return result;
+        return CRect(xy, xy + wh);
     }
     /// Create infinite rectangle.
     static CRect infinite() {
-        CPoint p0(std::numeric_limits<C>::min(), std::numeric_limits<C>::min());
-        CPoint p1(std::numeric_limits<C>::max(), std::numeric_limits<C>::max());
-        CRect result(p0, p1);
-        return result;
+        auto min = std::numeric_limits<C>::min();
+        auto max = std::numeric_limits<C>::max();
+        return CRect(min, min, max, max);
     }
     /// @}
 
@@ -140,25 +125,24 @@ public:
 
     /** @brief Get the corner of the rectangle with smallest coordinate values.
      * In 2Geom standard coordinate system, this means upper left. */
-    CPoint min() const { CPoint p(f[X].min(), f[Y].min()); return p; }
+    CPoint min() const { return CPoint(f[X].min(), f[Y].min()); }
     /** @brief Get the corner of the rectangle with largest coordinate values.
      * In 2Geom standard coordinate system, this means lower right. */
-    CPoint max() const { CPoint p(f[X].max(), f[Y].max()); return p; }
+    CPoint max() const { return CPoint(f[X].max(), f[Y].max()); }
     /** @brief Return the n-th corner of the rectangle.
      * Returns corners in the direction of growing angles, starting from
      * the one given by min(). For the standard coordinate system used
      * in 2Geom (+Y downwards), this means clockwise starting from
      * the upper left. */
     CPoint corner(unsigned i) const {
-        switch(i % 4) {
+        switch (i % 4) {
             case 0:  return CPoint(f[X].min(), f[Y].min());
             case 1:  return CPoint(f[X].max(), f[Y].min());
             case 2:  return CPoint(f[X].max(), f[Y].max());
             default: return CPoint(f[X].min(), f[Y].max());
         }
     }
-        
-    //We should probably remove these - they're coord sys gnostic
+
     /** @brief Return top coordinate of the rectangle (+Y is downwards). */
     C top() const { return f[Y].min(); }
     /** @brief Return bottom coordinate of the rectangle (+Y is downwards). */
@@ -173,7 +157,7 @@ public:
     /** @brief Get the vertical extent of the rectangle. */
     C height() const { return f[Y].extent(); }
     /** @brief Get the ratio of width to height of the rectangle. */
-    Coord aspectRatio() const { return Coord(width()) / Coord(height()); }
+    Coord aspectRatio() const { return static_cast<Coord>(width()) / height(); }
 
     /** @brief Get rectangle's width and height as a point.
      * @return Point with X coordinate corresponding to the width and the Y coordinate
@@ -182,7 +166,7 @@ public:
     /** @brief Get the point in the geometric center of the rectangle. */
     CPoint midpoint() const { return CPoint(f[X].middle(), f[Y].middle()); }
 
-    /** @brief Compute rectangle's area. */
+    /** @brief Compute the rectangle's area. */
     C area() const { return f[X].extent() * f[Y].extent(); }
     /** @brief Check whether the rectangle has zero area. */
     bool hasZeroArea() const { return f[X].isSingular() || f[Y].isSingular(); }
@@ -192,24 +176,27 @@ public:
     /** @brief Get the smaller extent (width or height) of the rectangle. */
     C minExtent() const { return std::min(f[X].extent(), f[Y].extent()); }
 
+    /** @brief Get rectangle's distance SQUARED away from the given point **/
+    C distanceSq(CPoint const &p) const {
+        return (p - clamp(p)).lengthSq();
+    }
+
     /** @brief Clamp point to the rectangle. */
     CPoint clamp(CPoint const &p) const {
-        CPoint result(f[X].clamp(p[X]), f[Y].clamp(p[Y]));
-        return result;
+        return CPoint(f[X].clamp(p[X]), f[Y].clamp(p[Y]));
     }
     /** @brief Get the nearest point on the edge of the rectangle. */
     CPoint nearestEdgePoint(CPoint const &p) const {
-        CPoint result = p;
         if (!contains(p)) {
-            result = clamp(p);
+            return clamp(p);
+        }
+        CPoint result = p;
+        C cx = f[X].nearestEnd(p[X]);
+        C cy = f[Y].nearestEnd(p[Y]);
+        if (std::abs(cx - p[X]) <= std::abs(cy - p[Y])) {
+            result[X] = cx;
         } else {
-            C cx = f[X].nearestEnd(p[X]);
-            C cy = f[Y].nearestEnd(p[Y]);
-            if (std::abs(cx - p[X]) <= std::abs(cy - p[Y])) {
-                result[X] = cx;
-            } else {
-                result[Y] = cy;
-            }
+            result[Y] = cy;
         }
         return result;
     }
@@ -269,11 +256,13 @@ public:
     }
     /** @brief Enlarge the rectangle to contain the given point. */
     void expandTo(CPoint const &p)        { 
-        f[X].expandTo(p[X]);  f[Y].expandTo(p[Y]);
+        f[X].expandTo(p[X]);
+        f[Y].expandTo(p[Y]);
     }
     /** @brief Enlarge the rectangle to contain the argument. */
     void unionWith(CRect const &b) { 
-        f[X].unionWith(b[X]); f[Y].unionWith(b[Y]);
+        f[X].unionWith(b[X]);
+        f[Y].unionWith(b[Y]);
     }
     /** @brief Enlarge the rectangle to contain the argument.
      * Unioning with an empty rectangle results in no changes. */
@@ -293,7 +282,8 @@ public:
      * half of the width, the X interval will contain only the X coordinate
      * of the midpoint; same for height. */
     void expandBy(C x, C y) { 
-        f[X].expandBy(x);  f[Y].expandBy(y);
+        f[X].expandBy(x);
+        f[Y].expandBy(y);
     }
     /** @brief Expand the rectangle by the coordinates of the given point.
      * This will expand the width by the X coordinate of the point in both directions
@@ -346,22 +336,22 @@ class GenericOptRect
     , boost::orable< typename CoordTraits<C>::OptRectType
     , boost::andable< typename CoordTraits<C>::OptRectType
     , boost::andable< typename CoordTraits<C>::OptRectType, typename CoordTraits<C>::RectType
-      > > > > >
+      >>>>>
 {
-    typedef typename CoordTraits<C>::IntervalType CInterval;
-    typedef typename CoordTraits<C>::OptIntervalType OptCInterval;
-    typedef typename CoordTraits<C>::PointType CPoint;
-    typedef typename CoordTraits<C>::RectType CRect;
-    typedef typename CoordTraits<C>::OptRectType OptCRect;
-    typedef std::optional<CRect> Base;
+    using CInterval = typename CoordTraits<C>::IntervalType;
+    using OptCInterval = typename CoordTraits<C>::OptIntervalType;
+    using CPoint = typename CoordTraits<C>::PointType;
+    using CRect = typename CoordTraits<C>::RectType;
+    using OptCRect = typename CoordTraits<C>::OptRectType;
+    using Base = std::optional<CRect>;
 public:
-    typedef CInterval D1Value;
-    typedef CInterval &D1Reference;
-    typedef CInterval const &D1ConstReference;
+    using D1Value = CInterval;
+    using D1Reference = CInterval &;
+    using D1ConstReference = CInterval const &;
 
     /// @name Create potentially empty rectangles.
     /// @{
-    GenericOptRect() : Base() {}
+    GenericOptRect() = default;
     GenericOptRect(GenericRect<C> const &a) : Base(CRect(a)) {}
     GenericOptRect(CPoint const &a, CPoint const &b) : Base(CRect(a, b)) {}
     GenericOptRect(C x0, C y0, C x1, C y1) : Base(CRect(x0, y0, x1, y1)) {}
@@ -372,7 +362,7 @@ public:
         }
         // else, stay empty.
     }
-    
+
     /** @brief Create a rectangle from a range of points.
      * The resulting rectangle will contain all points from the range.
      * If the range contains no points, the result will be an empty rectangle.
@@ -416,6 +406,13 @@ public:
     bool contains(CPoint const &p) const { return *this && (*this)->contains(p); }
     /// @}
 
+    /** @brief Compute the rectangle's area. */
+    C area() const { return *this ? (*this)->area() : 0; }
+    /** @brief Check whether the rectangle has zero area. */
+    bool hasZeroArea() const { return !*this || (*this)->hasZeroArea(); }
+    /** @brief Returns an empty optional (testing false) if the rectangle has zero area. */
+    OptCRect regularized() const { return hasZeroArea() ? OptCRect() : *this; }
+
     /// @name Modify the potentially empty rectangle.
     /// @{
     /** @brief Enlarge the rectangle to contain the argument.
@@ -444,7 +441,7 @@ public:
         if (x && y) {
             *this = CRect(*x, *y);
         } else {
-            *(static_cast<Base*>(this)) = std::nullopt;
+            *this = {};
         }
     }
     /** @brief Leave only the area overlapping with the argument.
@@ -454,7 +451,7 @@ public:
         if (b) {
             intersectWith(*b);
         } else {
-            *(static_cast<Base*>(this)) = std::nullopt;
+            *this = {};
         }
     }
     /** @brief Create or enlarge the rectangle to contain the given point.
@@ -490,7 +487,7 @@ public:
      * All empty rectangles are equal. */
     bool operator==(OptCRect const &other) const {
         if (!*this != !other) return false;
-        return *this ? (**this == *other) : true;
+        return *this ? **this == *other : true;
     }
     bool operator==(CRect const &other) const {
         if (!*this) return false;
@@ -516,13 +513,17 @@ inline bool GenericRect<C>::contains(OptCRect const &r) const {
 
 template <typename C>
 inline std::ostream &operator<<(std::ostream &out, GenericRect<C> const &r) {
-    out << "Rect " << r[X] << " x " << r[Y];
-    return out;
+    return out << "Rect " << r[X] << " x " << r[Y];
 }
 
-} // end namespace Geom
+template <typename C>
+inline std::ostream &operator<<(std::ostream &out, GenericOptRect<C> const &r) {
+    return r ? (out << *r) : (out << "Rect (empty)");
+}
 
-#endif // LIB2GEOM_SEEN_RECT_H
+} // namespace Geom
+
+#endif // LIB2GEOM_SEEN_GENERIC_RECT_H
 
 /*
   Local Variables:

@@ -4,7 +4,7 @@
  *//*
  * Authors:
  *   Krzysztof Kosiński <tweenk.pl@gmail.com>
- * 
+ *
  * Copyright 2015 Authors
  *
  * This library is free software; you can redistribute it and/or
@@ -183,3 +183,206 @@ TEST(LineTest, Intersection) {
     EXPECT_TRUE(a.intersect(lsb).empty());
     EXPECT_TRUE(b.intersect(lsa).empty());
 }
+
+#define RAND10 g_random_double_range(-10.0, 10.0)
+
+/** Ensure that intersections are reported at endpoints of
+ *  identical (overlapping) segments (reversed or not).
+ */
+TEST(LineTest, CoincidingIntersect)
+{
+    auto const eps = 1e-14;
+    auto const check_endpoint_intersections = [=](LineSegment const &s1, LineSegment const &s2) {
+        auto xings = s1.intersect(s2, eps);
+        ASSERT_EQ(xings.size(), 2);
+        EXPECT_TRUE(are_near(xings[0], s1.initialPoint()));
+        EXPECT_TRUE(are_near(xings[1], s1.finalPoint()));
+        EXPECT_intersections_valid(s1, s2, xings, eps);
+    };
+
+    // This fails on 6f7dfdc0317362bf294fed54ad06d14ac14ad809
+    check_endpoint_intersections(LineSegment(Point{1, 0}, Point{0, 0}),
+                                 LineSegment(Point{0, 0}, Point{1, 0}));
+
+    g_random_set_seed(0x13370AFA);
+    for (size_t _ = 0; _ < 10'000; _++) {
+        auto const a = Point(RAND10, RAND10);
+        auto const b = Point(RAND10, RAND10);
+        auto const ab = LineSegment(a, b);
+        auto const ba = LineSegment(b, a);
+        check_endpoint_intersections(ab, ab);
+        check_endpoint_intersections(ba, ba);
+        check_endpoint_intersections(ab, ba);
+    }
+}
+
+/** Test whether at least one intersection is detected
+ * when segments have an overlapping portion (due to numerics,
+ * parallel segments may not be exactly detected as parallel).
+*/
+TEST(LineTest, OverlappingIntersect)
+{
+    g_random_set_seed(0xCAFECAFE);
+    // Suppose the segments are [A, B] and [C, D].
+    // Case 1: A=C, B halfway between A and D
+    for (size_t _ = 0; _ < 10'000; _++)
+    {
+        auto const a = Point(RAND10, RAND10);
+        auto const d = Point(RAND10, RAND10);
+        auto const b = middle_point(a, d);
+        auto const ab = LineSegment(a, b);
+        auto const cd = LineSegment(a, d);
+        auto xings = ab.intersect(cd);
+        ASSERT_FALSE(xings.empty());
+        EXPECT_TRUE(are_near(xings[0], ab.initialPoint()));
+        EXPECT_intersections_valid(ab, cd, xings, 1e-12);
+    }
+
+    // Case 2: AB wholly contained inside CD
+    for (size_t _ = 0; _ < 10'000; _++)
+    {
+        auto const c = Point(RAND10, RAND10);
+        auto const d = Point(RAND10, RAND10);
+        auto const a = lerp(0.25, c, d);
+        auto const b = lerp(0.75, c, d);
+        auto const ab = LineSegment(a, b);
+        auto const cd = LineSegment(a, d);
+        auto xings = ab.intersect(cd);
+        ASSERT_FALSE(xings.empty());
+        EXPECT_TRUE(are_near(xings[0], ab.initialPoint()));
+        EXPECT_intersections_valid(ab, cd, xings, 1e-12);
+    }
+}
+
+/** Ensure that intersections are reported when the segments are separated
+ * from one another by less than the passed epsilon.
+ */
+TEST(LineTest, AlmostIntersect)
+{
+    for (double eps : {1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-3, 1.0}) {
+        auto const vertical   = LineSegment(Point(0.0, 0.5 * eps),   Point(0.0, 1.0));
+        auto const horizontal = LineSegment(Point(0.5 * eps, 0.0),   Point(1.0, 0.0));
+        auto const butt       = LineSegment(Point(0.0, -0.49 * eps),  Point(0.0, -1.0));
+        auto const too_far    = LineSegment(Point(0.0, -0.51 * eps), Point(0.0, -1.0));
+        auto xings = vertical.intersect(horizontal, eps);
+        ASSERT_FALSE(xings.empty());
+        EXPECT_intersections_valid(vertical, horizontal, xings, eps);
+        xings = vertical.intersect(butt, eps);
+        ASSERT_FALSE(xings.empty());
+        EXPECT_intersections_valid(vertical, butt, xings, eps);
+        xings = vertical.intersect(too_far, eps);
+        ASSERT_TRUE(xings.empty());
+    }
+}
+
+/** Ensure that overlaps are found as precisely as possible even when epsilon is large. */
+TEST(LineTest, FuzzyOverlap)
+{
+    auto const ab = LineSegment(Point(0, 0), Point(0, 20));
+    auto const cd = LineSegment(Point(0, 10), Point(0, 30));
+    auto xings = ab.intersect(cd, 4); // extra large eps
+    ASSERT_EQ(xings.size(), 2);
+    EXPECT_DOUBLE_EQ(xings[0].point()[1], 10);
+    EXPECT_DOUBLE_EQ(xings[0].first, 0.5);
+    EXPECT_DOUBLE_EQ(xings[0].second, 0.0);
+    EXPECT_DOUBLE_EQ(xings[1].point()[1], 20);
+    EXPECT_DOUBLE_EQ(xings[1].first, 1.0);
+    EXPECT_DOUBLE_EQ(xings[1].second, 0.5);
+}
+
+/** Ensure that adjacent collinear segments are still detected as intersecting at
+ * their exact common endpoint even when epsilon is large. */
+TEST(LineTest, FuzzyEndToEnd)
+{
+    auto const ab = LineSegment(Point(0, 0), Point(0, 10));
+    auto const cd = LineSegment(Point(0, 10), Point(0, 30));
+    auto xings = ab.intersect(cd, 4); // extra large eps
+    ASSERT_EQ(xings.size(), 1);
+    EXPECT_DOUBLE_EQ(xings[0].point()[1], 10);
+    EXPECT_DOUBLE_EQ(xings[0].first, 1.0);
+    EXPECT_DOUBLE_EQ(xings[0].second, 0.0);
+}
+
+/** Ensure that a single intersection is found when the end-to-end
+ * juncture contains a gap smaller than epsilon.
+ */
+TEST(LineTest, AlmostTouch)
+{
+    auto const ab = LineSegment(Point(0, 0), Point(0, 99));
+    auto const cd = LineSegment(Point(0, 101), Point(0, 200));
+    auto xings = ab.intersect(cd, 12);          // extra large eps
+    ASSERT_EQ(xings.size(), 1);
+    auto &x = xings[0];
+    EXPECT_DOUBLE_EQ(x.point()[X], 0);
+    EXPECT_DOUBLE_EQ(x.point()[Y], 100);
+    EXPECT_DOUBLE_EQ(x.first, 1.0);
+    EXPECT_DOUBLE_EQ(x.second, 0.0);
+}
+
+/** Ensure that a T-arrangement of segments has a single intersection
+ * detected if and only if the gap between the vertical part and the
+ * horizontal part is less than epsilon.
+ */
+TEST(LineTest, TBone)
+{
+    auto const horizontal = LineSegment(Point(-1, 1), Point(1, 1));
+    g_random_set_seed(0x01234567);
+
+    for (int exponent = -2; exponent > -13; exponent--) {
+        double const eps = std::pow(10, exponent);
+        for (size_t _ = 0; _ < 10'000; _++) {
+            auto const distance = g_random_double_range(0.0, 2.0 * eps);
+            size_t const expected_crossing_count = (size_t)(distance <= eps);
+            auto const xings = horizontal.intersect(LineSegment(Point(0, 0), Point(0, 1.0 - distance)), eps);
+            ASSERT_EQ(xings.size(), expected_crossing_count);
+            if (expected_crossing_count) {
+                auto const &x = xings[0];
+                EXPECT_DOUBLE_EQ(x.point()[X], 0.0);
+                EXPECT_DOUBLE_EQ(x.point()[Y], 1.0 - (0.5 * distance));
+                EXPECT_DOUBLE_EQ(x.first,  0.5);
+                EXPECT_DOUBLE_EQ(x.second, 1.0);
+            }
+        }
+    }
+}
+
+/** Ensure that the normal pushoff is detected as intersecting the original
+ * segment if and only if the push off distance is less than epsilon.
+ */
+TEST(LineTest, PushOff)
+{
+    auto const seg = LineSegment(Point(0, 0), Point(5, 3));
+    auto const normal = (seg.finalPoint() - seg.initialPoint()).cw().normalized();
+    g_random_set_seed(0xB787A350);
+
+    for (int exponent = 1; exponent > -13; exponent--) {
+        double const eps = std::pow(10, exponent);
+        for (size_t _ = 0; _ < 10'000; _++) {
+            auto const pushoff_distance = g_random_double_range(0.0, 2.0 * eps);
+            std::unique_ptr<LineSegment> pushed_off{
+                dynamic_cast<LineSegment *>(
+                    seg.transformed(
+                        Geom::Translate(pushoff_distance * normal)
+                                   )
+                                           )       };
+            auto const xings = seg.intersect(*pushed_off, eps);
+            bool const too_far = pushoff_distance > eps;
+            EXPECT_EQ(xings.empty(), too_far);
+            for (auto const &x : xings) {
+                EXPECT_TRUE(are_near(x.first,  0.0, eps) or are_near(x.first,  1.0, eps));
+                EXPECT_TRUE(are_near(x.second, 0.0, eps) or are_near(x.second, 1.0, eps));
+            }
+        }
+    }
+}
+
+/*
+  Local Variables:
+  mode:c++
+  c-file-style:"stroustrup"
+  c-file-offsets:((innamespace . 0)(inline-open . 0)(case-label . +))
+  indent-tabs-mode:nil
+  fill-column:99
+  End:
+*/
+// vim: filetype=cpp:expandtab:shiftwidth=4:tabstop=8:softtabstop=4:fileencoding=utf-8:textwidth=99 :

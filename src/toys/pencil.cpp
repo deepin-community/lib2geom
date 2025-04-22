@@ -80,7 +80,7 @@ naive_sb_seg_to_bez(Piecewise<D2<SBasis> > const &M,double t0,double t1){
 
 D2<SBasis>
 sb_seg_to_bez(Piecewise<D2<SBasis> > const &M,double t0,double t1){
-    Point M0,dM0,d2M0,M1,dM1,d2M1,A0,V0,A1,V1;
+    Point M0,dM0,d2M0,M1,dM1,d2M1,A0,A1;
     Piecewise<D2<SBasis> > dM,d2M;
     dM=derivative(M);
     d2M=derivative(dM);
@@ -351,9 +351,6 @@ public:
       handles.push_back(&adjuster3);
       toggles.emplace_back("Seq", false);
       toggles.emplace_back("Linfty", true);
-      //}
-    //sliders.push_back(Slider(0.0, 1.0, 0.0, 0.0, "t"));
-    //handles.push_back(&(sliders[0]));
   }
 };
 

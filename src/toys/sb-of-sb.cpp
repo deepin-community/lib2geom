@@ -232,11 +232,11 @@ plot3d(cairo_t *cr, SBasisOf<SBasisOf<double> > const &f, Frame frame){
 }
 
 SBasisOf<SBasisOf<double> > integral(SBasisOf<SBasisOf<double> > const &f, unsigned var){
-    //variable of f = 1, variable of f's coefficients = 0. 
-    if (var == 1) return integral(f);
+    //variable of f = 1, variable of f's coefficients = 0.
+    if (var == 1) return Geom::integral(f);
     SBasisOf<SBasisOf<double> > result;
     for(unsigned i = 0; i< f.size(); i++) {
-        result.push_back(LinearOf<SBasisOf<double> >( integral(f[i][0]),integral(f[i][1])));
+        result.push_back(LinearOf<SBasisOf<double> >(Geom::integral(f[i][0]), Geom::integral(f[i][1])));
     }
     return result;
 }
@@ -255,7 +255,7 @@ Piecewise<SBasis> convole(SBasisOf<double> const &f, Interval dom_f,
     v_u += SBasisOf<SBasisOf<double> >(SBasisOf<double>(dom_f.min()/dom_g.extent()));
     SBasisOf<SBasisOf<double> > gg = multi_compose(g,(v - u*(dom_f.extent()/dom_g.extent())));
     SBasisOf<SBasisOf<double> > ff = SBasisOf<SBasisOf<double> >(f);
-    SBasisOf<SBasisOf<double> > hh = integral(ff*gg,0);
+    SBasisOf<SBasisOf<double> > hh = ::integral(ff*gg,0);
     
     Piecewise<SBasis> result;
     result.cuts.push_back(dom_f.min()+dom_g.min());

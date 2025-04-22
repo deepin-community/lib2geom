@@ -127,7 +127,8 @@ public:
     /// Get the line's origin point.
     Point origin() const { return _initial; }
     /** @brief Get the line's raw direction vector.
-     * The retrieved vector is normalized to unit length. */
+     * The length of the retrieved vector is equal to the length of a segment parametrized by
+     * a time interval of length 1. */
     Point vector() const { return _final - _initial; }
     /** @brief Get the line's normalized direction vector.
      * The retrieved vector is normalized to unit length. */

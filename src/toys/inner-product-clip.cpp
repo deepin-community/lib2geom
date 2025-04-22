@@ -52,7 +52,7 @@ class InnerProductClip: public Toy {
 	double d;
         {
             double x = width - 60, y = height - 60;
-            Point p(x, y), dpoint(25,25), xo(25,0), yo(0,25);
+            Point p(x, y), dpoint(25,25), xo(25,0);
             togs[0].bounds = Rect(p,     p + dpoint);
             togs[1].bounds = Rect(p + xo, p + xo + dpoint);
             draw_toggles(cr, togs);

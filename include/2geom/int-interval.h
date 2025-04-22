@@ -40,16 +40,17 @@ namespace Geom {
  * @brief Range of integers that is never empty.
  * @ingroup Primitives
  */
-typedef GenericInterval<IntCoord> IntInterval;
+using IntInterval = GenericInterval<IntCoord>;
 
 /**
  * @brief Range of integers that can be empty.
  * @ingroup Primitives
  */
-typedef GenericOptInterval<IntCoord> OptIntInterval;
+using OptIntInterval = GenericOptInterval<IntCoord>;
 
 } // namespace Geom
-#endif // !LIB2GEOM_SEEN_INT_INTERVAL_H
+
+#endif // LIB2GEOM_SEEN_INT_INTERVAL_H
 
 /*
   Local Variables:

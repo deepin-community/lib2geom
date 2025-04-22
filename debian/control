@@ -15,15 +15,15 @@ Build-Depends-Arch:
  libgsl-dev,
  libgtest-dev,
  libgtk-3-dev,
- pkg-config,
+ pkgconf,
  ragel,
-Standards-Version: 4.6.2
+Standards-Version: 4.7.0
 Rules-Requires-Root: no
 Homepage: https://gitlab.com/inkscape/lib2geom
 Vcs-Git: https://salsa.debian.org/multimedia-team/lib2geom.git
 Vcs-Browser: https://salsa.debian.org/multimedia-team/lib2geom
 
-Package: lib2geom1.2.0
+Package: lib2geom1.4.0
 Architecture: any
 Multi-Arch: same
 Depends:
@@ -52,7 +52,7 @@ Section: libdevel
 Architecture: any
 Multi-Arch: same
 Depends:
- lib2geom1.2.0 (= ${binary:Version}),
+ lib2geom1.4.0 (= ${binary:Version}),
  ${misc:Depends},
  ${shlibs:Depends},
 Description: robust computational geometry framework -- development library

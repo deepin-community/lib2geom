@@ -808,7 +808,7 @@ public:
                     double val = boxe.corner(corner)[D];
                     std::vector<double> times = roots( c[D] - val );
                     if ( times.size()>0 ){
-                        double t = lerp( times.front(), tiles_data[i].f, tiles_data[i].t );
+                        double t = Geom::lerp(times.front(), tiles_data[i].f, tiles_data[i].t);
                         double hit_place = c[1-D](times.front());
                         if ( boxe[1-D].contains(hit_place) ){
                             result = true;

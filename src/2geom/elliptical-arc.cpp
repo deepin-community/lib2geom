@@ -54,7 +54,7 @@ namespace Geom
  * @brief Elliptical arc curve
  *
  * Elliptical arc is a curve taking the shape of a section of an ellipse.
- * 
+ *
  * The arc function has two forms: the regular one, mapping the unit interval to points
  * on 2D plane (the linear domain), and a second form that maps some interval
  * \f$A \subseteq [0,2\pi)\f$ to the same points (the angular domain). The interval \f$A\f$
@@ -96,15 +96,7 @@ namespace Geom
 /** @brief Compute bounds of an elliptical arc.
  * The bounds computation works as follows. The extreme X and Y points
  * are either the endpoints or local minima / maxima of the ellipse.
- * We already have endpoints, and we can find the local extremes
- * by computing a partial derivative with respect to the angle
- * and equating that to zero:
- * \f{align*}{
-     x &= r_x \cos \varphi \cos \theta - r_y \sin \varphi \sin \theta + c_x \\ 
-     \frac{\partial x}{\partial \theta} &= -r_x \cos \varphi \sin \theta - r_y \sin \varphi \cos \theta = 0 \\ 
-     \frac{\sin \theta}{\cos \theta} &= \tan\theta = -\frac{r_y \sin \varphi}{r_x \cos \varphi} \\ 
-     \theta &= \tan^{-1} \frac{-r_y \sin \varphi}{r_x \cos \varphi}
-   \f}
+ * We already have endpoints, and we compute the local extremes.
  * The local extremes correspond to two angles separated by \f$\pi\f$.
  * Once we compute these angles, we check whether they belong to the arc,
  * and if they do, we evaluate the ellipse at these angles.
@@ -114,38 +106,69 @@ namespace Geom
 Rect EllipticalArc::boundsExact() const
 {
     if (isChord()) {
-        return chord().boundsExact();
+        return { _initial_point, _final_point };
     }
 
-    Coord coord[2][4] = {
-        { _initial_point[X], _final_point[X], 0, 0 },
-        { _initial_point[Y], _final_point[Y], 0, 0 }
+    if (_angles.isFull()) {
+        return _ellipse.boundsExact();
+    }
+
+    auto const trans = unitCircleTransform();
+
+    auto proj_bounds = [&] (Dim2 d) {
+        // The dth coordinate function pulls back to trans[d] * x + trans[d + 2] * y + trans[d + 4]
+        // in the coordinate system where the ellipse is a unit circle. We compute its range of
+        // values on the unit circle arc.
+        auto result = Interval(_initial_point[d], _final_point[d]);
+
+        auto const v = Point(trans[d], trans[d + 2]);
+        auto const r = v.length();
+        auto const mid = trans[d + 4];
+        auto const angle = Angle(v);
+
+        if (_angles.contains(angle)) {
+            result.expandTo(mid + r);
+        }
+        if (_angles.contains(angle + M_PI)) {
+            result.expandTo(mid - r);
+        }
+
+        return result;
     };
-    int ncoord[2] = { 2, 2 };
 
-    Angle extremes[2][2];
-    double sinrot, cosrot;
-    sincos(rotationAngle(), sinrot, cosrot);
+    return { proj_bounds(X), proj_bounds(Y) };
+}
 
-    extremes[X][0] = std::atan2( -ray(Y) * sinrot, ray(X) * cosrot );
-    extremes[X][1] = extremes[X][0] + M_PI;
-    extremes[Y][0] = std::atan2( ray(Y) * cosrot, ray(X) * sinrot );
-    extremes[Y][1] = extremes[Y][0] + M_PI;
+void EllipticalArc::expandToTransformed(Rect &bbox, Affine const &transform) const
+{
+    bbox.expandTo(_final_point * transform);
 
-    for (unsigned d = 0; d < 2; ++d) {
-        for (unsigned i = 0; i < 2; ++i) {
-            if (containsAngle(extremes[d][i])) {
-                coord[d][ncoord[d]++] = valueAtAngle(extremes[d][i], d ? Y : X);
+    if (isChord()) {
+        return;
+    }
+
+    auto const trans = unitCircleTransform() * transform;
+
+    for (auto d : { X, Y }) {
+        // See boundsExact() for explanation.
+        auto const v = Point(trans[d], trans[d + 2]);
+        auto const r = v.length();
+        auto const mid = trans[d + 4];
+        auto const interval = Interval(mid - r, mid + r);
+
+        if (_angles.isFull()) {
+            bbox[d].unionWith(interval);
+        } else if (!bbox[d].contains(interval)) {
+            auto const angle = Angle(v);
+            if (_angles.contains(angle)) {
+                bbox[d].expandTo(mid + r);
+            }
+            if (_angles.contains(angle + M_PI)) {
+                bbox[d].expandTo(mid - r);
             }
         }
     }
-
-    Interval xival = Interval::from_range(coord[X], coord[X] + ncoord[X]);
-    Interval yival = Interval::from_range(coord[Y], coord[Y] + ncoord[Y]);
-    Rect result(xival, yival);
-    return result;
 }
-
 
 Point EllipticalArc::pointAtAngle(Coord t) const
 {
@@ -289,7 +312,15 @@ EllipticalArc::pointAndDerivatives(Coord t, unsigned int n) const
 
 Point EllipticalArc::pointAt(Coord t) const
 {
-    if (isChord()) return chord().pointAt(t);
+    if (t == 0.0) {
+        return initialPoint();
+    }
+    if (t == 1.0) {
+        return finalPoint();
+    }
+    if (isChord()) {
+        return chord().pointAt(t);
+    }
     return _ellipse.pointAt(angleAt(t));
 }
 
@@ -302,15 +333,19 @@ Coord EllipticalArc::valueAt(Coord t, Dim2 d) const
 Curve* EllipticalArc::portion(double f, double t) const
 {
     // fix input arguments
-    if (f < 0) f = 0;
-    if (f > 1) f = 1;
-    if (t < 0) t = 0;
-    if (t > 1) t = 1;
+    f = std::clamp(f, 0.0, 1.0);
+    t = std::clamp(t, 0.0, 1.0);
 
     if (f == t) {
         EllipticalArc *arc = new EllipticalArc();
         arc->_initial_point = arc->_final_point = pointAt(f);
         return arc;
+    }
+    if (f == 0.0 && t == 1.0) {
+        return duplicate();
+    }
+    if (f == 1.0 && t == 0.0) {
+        return reverse();
     }
 
     EllipticalArc *arc = static_cast<EllipticalArc*>(duplicate());
@@ -625,8 +660,14 @@ std::vector<CurveIntersection> EllipticalArc::intersect(Curve const &other, Coor
     }
 
     if (auto arc = dynamic_cast<EllipticalArc const *>(&other)) {
-        auto result = _filterIntersections(_ellipse.intersect(arc->_ellipse), true);
-        return arc->_filterIntersections(std::move(result), false);
+        std::vector<CurveIntersection> crossings;
+        try {
+            crossings = _ellipse.intersect(arc->_ellipse);
+        } catch (InfinitelyManySolutions &) {
+            // This could happen if the two arcs come from the same ellipse.
+            return _intersectSameEllipse(arc);
+        }
+        return arc->_filterIntersections(_filterIntersections(std::move(crossings), true), false);
     }
 
     // in case someone wants to make a custom curve type
@@ -635,6 +676,43 @@ std::vector<CurveIntersection> EllipticalArc::intersect(Curve const &other, Coor
     return result;
 }
 
+/** @brief Check if two arcs on the same ellipse intersect/overlap.
+ *
+ * @param other Another elliptical arc on the same ellipse as this one.
+ * @return If the arcs overlap, the returned vector contains synthesized intersections
+ *         at the start and end of the overlap.
+ *         If the arcs do not overlap, an empty vector is returned.
+ */
+std::vector<ShapeIntersection> EllipticalArc::_intersectSameEllipse(EllipticalArc const *other) const
+{
+    assert(_ellipse == other->_ellipse);
+    auto const &other_angles = other->angularInterval();
+    std::vector<ShapeIntersection> result;
+
+    /// A closure to create an "intersection" at the prescribed angle.
+    auto const synthesize_intersection = [&](Angle angle) {
+        auto const time = timeAtAngle(angle);
+        if (result.end() == std::find_if(result.begin(), result.end(),
+            [=](ShapeIntersection const &xing) -> bool {
+                return xing.first == time;
+            }))
+        {
+            result.emplace_back(time, other->timeAtAngle(angle), _ellipse.pointAt(angle));
+        }
+    };
+
+    for (auto a : {_angles.initialAngle(), _angles.finalAngle()}) {
+        if (other_angles.contains(a)) {
+            synthesize_intersection(a);
+        }
+    }
+    for (auto a : {other_angles.initialAngle(), other_angles.finalAngle()}) {
+        if (_angles.contains(a)) {
+            synthesize_intersection(a);
+        }
+    }
+    return result;
+}
 
 void EllipticalArc::_updateCenterAndAngles()
 {
@@ -642,12 +720,16 @@ void EllipticalArc::_updateCenterAndAngles()
     Point d = initialPoint() - finalPoint();
     Point mid = middle_point(initialPoint(), finalPoint());
 
-    // if ip = sp, the arc contains no other points
-    if (initialPoint() == finalPoint()) {
+    auto degenerate_ellipse = [&] {
         _ellipse = Ellipse();
         _ellipse.setCenter(initialPoint());
         _angles = AngleInterval();
         _large_arc = false;
+    };
+
+    // if ip = fp, the arc contains no other points
+    if (initialPoint() == finalPoint()) {
+        degenerate_ellipse();
         return;
     }
 
@@ -668,7 +750,7 @@ void EllipticalArc::_updateCenterAndAngles()
     Rotate invrot = rot.inverse(); // the matrix in F.6.5.1
 
     Point r = rays();
-    Point p = (initialPoint() - mid) * invrot; // x', y' in F.6.5.1
+    Point p = d / 2 * invrot; // x', y' in F.6.5.1
     Point c(0,0); // cx', cy' in F.6.5.2
 
     // Correct out-of-range radii
@@ -682,7 +764,12 @@ void EllipticalArc::_updateCenterAndAngles()
         Coord rxry = r[X]*r[X] * r[Y]*r[Y];
         Coord pxry = p[X]*p[X] * r[Y]*r[Y];
         Coord rxpy = r[X]*r[X] * p[Y]*p[Y];
-        Coord rad = (rxry - pxry - rxpy)/(rxpy + pxry);
+        Coord const denominator = rxpy + pxry;
+        if (denominator == 0.0) {
+            degenerate_ellipse();
+            return;
+        }
+        Coord rad = (rxry - pxry - rxpy) / denominator;
         // normally rad should never be negative, but numerical inaccuracy may cause this
         if (rad > 0) {
             rad = std::sqrt(rad);
@@ -795,9 +882,10 @@ void EllipticalArc::operator*=(Affine const& m)
     _angles.setFinal(_ellipse.timeAt(_final_point));
 }
 
-bool EllipticalArc::operator==(Curve const &c) const
+bool EllipticalArc::_equalTo(Curve const &c) const
 {
-    EllipticalArc const *other = dynamic_cast<EllipticalArc const *>(&c);
+    if (this == &c) return true;
+    auto other = dynamic_cast<EllipticalArc const *>(&c);
     if (!other) return false;
     if (_initial_point != other->_initial_point) return false;
     if (_final_point != other->_final_point) return false;
@@ -854,13 +942,20 @@ int EllipticalArc::winding(Point const &p) const
         swap(ymin_a, ymax_a);
     }
 
-    Interval yspan(ymin[Y], ymax[Y]);
-    if (!yspan.lowerContains(p[Y])) return 0;
+    if (!Interval(ymin[Y], ymax[Y]).lowerContains(p[Y])) {
+        return 0;
+    }
 
-    bool left = cross(ymax - ymin, p - ymin) > 0;
-    bool inside = _ellipse.contains(p);
-    bool includes_ymin = _angles.contains(ymin_a);
-    bool includes_ymax = _angles.contains(ymax_a);
+    bool const left = cross(ymax - ymin, p - ymin) > 0;
+    bool const inside = _ellipse.contains(p);
+    if (_angles.isFull()) {
+        if (inside) {
+            return sweep() ? 1 : -1;
+        }
+        return 0;
+    }
+    bool const includes_ymin = _angles.contains(ymin_a);
+    bool const includes_ymax = _angles.contains(ymax_a);
 
     AngleInterval rarc(ymin_a, ymax_a, true),
                   larc(ymax_a, ymin_a, true);
@@ -874,65 +969,55 @@ int EllipticalArc::winding(Point const &p) const
         swap(ip, fp);
     }
 
-    bool initial_left = larc.contains(ia);
-    bool initial_right = !initial_left; // rarc.contains(ia);
-    bool final_left = larc.contains(fa);
-    bool final_right = !final_left; //  rarc.contains(fa);
+    bool const initial_left = larc.contains(ia);
+    bool const final_left = larc.contains(fa);
 
-    int result = 0;
+    bool intersects_left = false, intersects_right = false;
     if (inside || left) {
-        if (includes_ymin && final_right) {
-            Interval ival(ymin[Y], fp[Y]);
-            if (ival.lowerContains(p[Y])) {
-                ++result;
-            }
-        }
-        if (initial_right && final_right && !largeArc()) {
-            Interval ival(ip[Y], fp[Y]);
-            if (ival.lowerContains(p[Y])) {
-                ++result;
-            }
-        }
-        if (initial_right && includes_ymax) {
-            Interval ival(ip[Y], ymax[Y]);
-            if (ival.lowerContains(p[Y])) {
-                ++result;
-            }
-        }
-        if (!initial_right && !final_right && includes_ymin && includes_ymax) {
-            Interval ival(ymax[Y], ymin[Y]);
-            if (ival.lowerContains(p[Y])) {
-                ++result;
-            }
-        }
+        // The point is inside the ellipse or to the left of it, so the rightwards horizontal ray
+        // may intersect the part of the arc contained in the right half of the ellipse.
+        // There are four ways in which this can happen.
+
+        intersects_right =
+            // Possiblity 1: the arc extends into the right half through the min-Y point
+            // and the ray intersects this extension:
+            (includes_ymin && !final_left && Interval(ymin[Y], fp[Y]).lowerContains(p[Y]))
+            ||
+            // Possibility 2: the arc starts and ends within the right half (hence, it cannot be the
+            // "large arc") and the ray's Y-coordinate is within the Y-coordinate range of the arc:
+            (!initial_left && !final_left && !largeArc() && Interval(ip[Y], fp[Y]).lowerContains(p[Y]))
+            ||
+            // Possibility 3: the arc starts in the right half and continues through the max-Y
+            // point into the left half:
+            (!initial_left && includes_ymax && Interval(ip[Y], ymax[Y]).lowerContains(p[Y]))
+            ||
+            // Possibility 4: the entire right half of the ellipse is contained in the arc.
+            (initial_left && final_left && includes_ymin && includes_ymax);
     }
     if (left && !inside) {
-        if (includes_ymin && initial_left) {
-            Interval ival(ymin[Y], ip[Y]);
-            if (ival.lowerContains(p[Y])) {
-                --result;
-            }
-        }
-        if (initial_left && final_left && !largeArc()) {
-            Interval ival(ip[Y], fp[Y]);
-            if (ival.lowerContains(p[Y])) {
-                --result;
-            }
-        }
-        if (final_left && includes_ymax) {
-            Interval ival(fp[Y], ymax[Y]);
-            if (ival.lowerContains(p[Y])) {
-                --result;
-            }
-        }
-        if (!initial_left && !final_left && includes_ymin && includes_ymax) {
-            Interval ival(ymax[Y], ymin[Y]);
-            if (ival.lowerContains(p[Y])) {
-                --result;
-            }
-        }
+        // The point is to the left of the ellipse, so the rightwards horizontal ray
+        // may intersect the part of the arc contained in the left half of the ellipse.
+        // There are four ways in which this can happen.
+
+        intersects_left =
+            // Possibility 1: the arc starts in the left half and continues through the min-Y
+            // point into the right half:
+            (includes_ymin && initial_left && Interval(ymin[Y], ip[Y]).lowerContains(p[Y]))
+            ||
+            // Possibility 2: the arc starts and ends within the left half (hence, it cannot be the
+            // "large arc") and the ray's Y-coordinate is within the Y-coordinate range of the arc:
+            (initial_left && final_left && !largeArc() && Interval(ip[Y], fp[Y]).lowerContains(p[Y]))
+            ||
+            // Possibility 3: the arc extends into the left half through the max-Y point
+            // and the ray intersects this extension:
+            (final_left && includes_ymax && Interval(fp[Y], ymax[Y]).lowerContains(p[Y]))
+            ||
+            // Possibility 4: the entire left half of the ellipse is contained in the arc.
+            (!initial_left && !final_left && includes_ymin && includes_ymax);
+
     }
-    return sweep() ? result : -result;
+    int const winding_assuming_increasing_angles = (int)intersects_right - (int)intersects_left;
+    return sweep() ? winding_assuming_increasing_angles : -winding_assuming_increasing_angles;
 }
 
 std::ostream &operator<<(std::ostream &out, EllipticalArc const &ea)

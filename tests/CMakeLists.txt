@@ -25,13 +25,16 @@ elliptical-arc-test
 intersection-graph-test
 interval-test
 line-test
+min-bbox-test
 nl-vector-test
 parallelogram-test
 path-test
+planar-graph-test
 point-test
 polynomial-test
 rect-test
 sbasis-test
+self-intersections-test
 )
 
 foreach(source ${2GEOM_GTESTS_SRC})
@@ -49,6 +52,6 @@ foreach(source ${2GEOM_TESTS_SRC})
 endforeach(source)
 
 if(WIN32 AND 2GEOM_BUILD_SHARED)
-    add_custom_target(copy ALL COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_BINARY_DIR}/src/2geom/lib2geom.dll ${CMAKE_BINARY_DIR}/src/tests/lib2geom.dll)
+    add_custom_target(copy ALL COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_BINARY_DIR}/src/2geom/lib2geom.dll ${CMAKE_BINARY_DIR}/tests/lib2geom.dll)
     add_dependencies(copy 2geom)
 endif()

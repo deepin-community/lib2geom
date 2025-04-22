@@ -72,7 +72,7 @@ class EllipseFitting : public Toy
         {
             e.fit(psh.pts);
         }
-        catch(LogicalError exc)
+        catch (LogicalError const &exc)
         {
             std::cerr << exc.what() << std::endl;
             Toy::draw(cr, notify, width, height, save,timer_stream);
@@ -86,7 +86,7 @@ class EllipseFitting : public Toy
                 std::unique_ptr<EllipticalArc> eap( e.arc(psh.pts[0], psh.pts[2], psh.pts[4]) );
                 ea = *eap;
             }
-            catch(RangeError exc)
+            catch (RangeError const &exc)
             {
                 std::cerr << exc.what() << std::endl;
                 Toy::draw(cr, notify, width, height, save,timer_stream);

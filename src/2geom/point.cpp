@@ -253,14 +253,13 @@ Point constrain_angle(Point const &A, Point const &B, unsigned int n, Point cons
     return A + dir * Rotate(k * 2.0 * M_PI / (double)n) * L2(diff);
 }
 
-std::ostream &operator<<(std::ostream &out, const Geom::Point &p)
+std::ostream &operator<<(std::ostream &out, Geom::Point const &p)
 {
-    out << "(" << format_coord_nice(p[X]) << ", "
-               << format_coord_nice(p[Y]) << ")";
-    return out;
+    return out << "(" << format_coord_nice(p[X]) << ", "
+                      << format_coord_nice(p[Y]) << ")";
 }
 
-} // end namespace Geom
+} // namespace Geom
 
 /*
   Local Variables:
